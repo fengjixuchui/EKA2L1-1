@@ -661,22 +661,11 @@ namespace eka2l1::epoc {
             // Resize the screen bitmap
             if (screen_texture) {
                 eka2l1::vec2 screen_size_scaled = current_mode().size * new_scale_factor;
-                drivers::handle new_screen_handle = drivers::create_bitmap(driver, screen_size_scaled, 32);
-
-                // We don't store redraw, so for now draw a scaled version of the window to the new bitmap
                 drivers::graphics_command_builder cmd_builder;
 
-                eka2l1::rect source_rect;           // Empty...
-                eka2l1::rect dest_rect(eka2l1::vec2{0, 0}, screen_size_scaled);
-
-                cmd_builder.bind_bitmap(new_screen_handle);
-                cmd_builder.draw_bitmap(screen_texture, 0, dest_rect, source_rect);
-                cmd_builder.destroy_bitmap(screen_texture);
-
+                cmd_builder.resize_bitmap(screen_texture, screen_size_scaled);
                 drivers::command_list retrieved = cmd_builder.retrieve_command_list();
                 driver->submit_command_list(retrieved);
-
-                screen_texture = new_screen_handle;
 
                 // Wholeheartedly need a redraw pls
                 flags_ |= FLAG_SERVER_REDRAW_PENDING;
@@ -700,7 +689,7 @@ namespace eka2l1::epoc {
 
         // We want to keep the original display size in case it's downscale.
         if ((flags_ & FLAG_SCREEN_UPSCALE_FACTOR_LOCK) == 0) {
-            correct_display_scale_factor = common::min(new_scale_factor_x, new_scale_factor_y);
+            correct_display_scale_factor = common::min(logic_scale_factor_x, logic_scale_factor_y);
 
             if (correct_display_scale_factor < 1.0f) {
                 correct_display_scale_factor = 1.0f;

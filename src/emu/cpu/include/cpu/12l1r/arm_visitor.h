@@ -119,6 +119,7 @@ namespace eka2l1::arm::r12l1 {
         bool arm_LDR_imm(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index d, std::uint16_t imm12);
         bool arm_LDR_reg(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index d, std::uint8_t imm5, common::armgen::shift_type shift, reg_index m);
         bool arm_LDRD_imm(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, std::uint8_t imm8a, std::uint8_t imm8b);
+        bool arm_LDRD_reg(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, reg_index m);
         bool arm_LDRB_lit(common::cc_flags cond, bool U, reg_index t, std::uint16_t imm12);
         bool arm_LDRB_imm(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, std::uint16_t imm12);
         bool arm_LDRB_reg(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, std::uint8_t imm5, common::armgen::shift_type shift, reg_index m);
@@ -131,6 +132,7 @@ namespace eka2l1::arm::r12l1 {
         bool arm_STR_imm(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, std::uint16_t imm12);
         bool arm_STR_reg(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, std::uint8_t imm5, common::armgen::shift_type shift, reg_index m);
         bool arm_STRD_imm(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, std::uint8_t imm8a, std::uint8_t imm8b);
+        bool arm_STRD_reg(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, reg_index m);
         bool arm_STRB_imm(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, std::uint16_t imm12);
         bool arm_STRB_reg(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, std::uint8_t imm5, common::armgen::shift_type shift, reg_index m);
         bool arm_STRH_imm(common::cc_flags cond, bool P, bool U, bool W, reg_index n, reg_index t, std::uint8_t imm8a, std::uint8_t imm8b);
@@ -145,11 +147,19 @@ namespace eka2l1::arm::r12l1 {
         bool arm_SMLAL(common::cc_flags cond, bool S, reg_index d_hi, reg_index d_lo, reg_index m, reg_index n);
         bool arm_SMULxy(common::cc_flags cond, reg_index d, reg_index m, bool M, bool N, reg_index n);
         bool arm_SMLAxy(common::cc_flags cond, reg_index d, reg_index a, reg_index m, bool M, bool N, reg_index n);
+        bool arm_SMULWy(common::cc_flags cond, reg_index d, reg_index m, bool top, reg_index n);
+        bool arm_SMLAWy(common::cc_flags cond, reg_index d, reg_index a, reg_index m, bool top, reg_index n);
 
         // Status register access
         bool arm_MRS(common::cc_flags cond, reg_index d);
         bool arm_MSR_imm(common::cc_flags cond, int mask, int rotate, std::uint8_t imm8);
         bool arm_MSR_reg(common::cc_flags cond, int mask, reg_index n);
+
+        // Coprocessors
+        bool arm_MCR(common::cc_flags cond, std::size_t opc1, int cr_n, reg_index t, std::size_t coproc_no,
+                     std::size_t opc2, int cr_m);
+        bool arm_MRC(common::cc_flags cond, std::size_t opc1, int cr_n, reg_index t, std::size_t coproc_no,
+                     size_t opc2, int cr_m);
 
         // Synchronization
         bool arm_STREX(common::cc_flags cond, reg_index n, reg_index d, reg_index t);
@@ -160,11 +170,18 @@ namespace eka2l1::arm::r12l1 {
         bool arm_CLZ(common::cc_flags cond, reg_index d, reg_index m);
         bool arm_SXTH(common::cc_flags cond, reg_index d, std::uint8_t rotate_base_8, reg_index m);
         bool arm_UXTH(common::cc_flags cond, reg_index d, std::uint8_t rotate_base_8, reg_index m);
+        bool arm_SXTAH(common::cc_flags cond, reg_index n, reg_index d, std::uint8_t rotate, reg_index m);
+        bool arm_UXTAH(common::cc_flags cond, reg_index n, reg_index d, std::uint8_t rotate, reg_index m);
+        bool arm_SXTAB(common::cc_flags cond, reg_index n, reg_index d, std::uint8_t rotate, reg_index m);
+        bool arm_UXTAB(common::cc_flags cond, reg_index n, reg_index d, std::uint8_t rotate, reg_index m);
         bool arm_SXTB(common::cc_flags cond, reg_index d, std::uint8_t rotate_base_8, reg_index m);
         bool arm_UXTB(common::cc_flags cond, reg_index d, std::uint8_t rotate_base_8, reg_index m);
         bool arm_SEL(common::cc_flags cond, reg_index n, reg_index d, reg_index m);
         bool arm_PKHBT(common::cc_flags cond, reg_index n, reg_index d, std::uint8_t imm5, reg_index m);
         bool arm_PKHTB(common::cc_flags cond, reg_index n, reg_index d, std::uint8_t imm5, reg_index m);
+        bool arm_RBIT(common::cc_flags cond, reg_index d, reg_index m);
+        bool arm_REV(common::cc_flags cond, reg_index d, reg_index m);
+        bool arm_REV16(common::cc_flags cond, reg_index d, reg_index m);
 
         // Hint
         bool arm_PLD_imm(bool add, bool R, reg_index n, std::uint16_t imm12);
@@ -187,6 +204,7 @@ namespace eka2l1::arm::r12l1 {
         bool vfp_VMOV_u32_f32(common::cc_flags cond, const std::size_t Vn, reg_index t, bool N);
         bool vfp_VMOV_f32_u32(common::cc_flags cond, const std::size_t Vn, reg_index t, bool N);
         bool vfp_VCMP(common::cc_flags cond, bool D, std::size_t Vd, bool sz, bool E, bool M, std::size_t Vm);
+        bool vfp_VCMP_zero(common::cc_flags cond, bool D, std::size_t Vd, bool sz, bool E);
         bool vfp_VCVT_to_u32(common::cc_flags cond, bool D, std::size_t Vd, bool sz, bool round_towards_zero, bool M, std::size_t Vm);
         bool vfp_VCVT_to_s32(common::cc_flags cond, bool D, std::size_t Vd, bool sz, bool round_towards_zero, bool M, std::size_t Vm);
         bool vfp_VCVT_from_int(common::cc_flags cond, bool D, std::size_t Vd, bool sz, bool is_signed, bool M, std::size_t Vm);

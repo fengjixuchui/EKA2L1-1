@@ -29,24 +29,24 @@
 
 namespace eka2l1::arm {
     class dynarmic_core_cp15 : public Dynarmic::A32::Coprocessor {
-        std::uint32_t wrwr;
+        std::uint32_t uprw;
 
     public:
         using coproc_reg = Dynarmic::A32::CoprocReg;
 
         explicit dynarmic_core_cp15()
-            : wrwr(0) {
+            : uprw(0) {
         }
 
         ~dynarmic_core_cp15() override {
         }
 
-        void set_wrwr(const std::uint32_t wrwr_val) {
-            wrwr = wrwr_val;
+        void set_uprw(const std::uint32_t uprw_val) {
+            uprw = uprw_val;
         }
 
-        const std::uint32_t get_wrwr() const {
-            return wrwr;
+        const std::uint32_t get_uprw() const {
+            return uprw;
         }
 
         std::optional<Callback> CompileInternalOperation(bool two, unsigned opc1, coproc_reg CRd,
@@ -67,7 +67,7 @@ namespace eka2l1::arm {
         CallbackOrAccessOneWord CompileGetOneWord(bool two, unsigned opc1, coproc_reg CRn, coproc_reg CRm,
             unsigned opc2) override {
             if ((CRn == coproc_reg::C13) && (CRm == coproc_reg::C0) && (opc1 == 0) && (opc2 == 2)) {
-                return &wrwr;
+                return &uprw;
             }
 
             return CallbackOrAccessOneWord{};
@@ -281,7 +281,9 @@ namespace eka2l1::arm {
         cb = std::make_unique<dynarmic_core_callback>(*this, cp15);
 
         auto monitor_bb = reinterpret_cast<dynarmic_exclusive_monitor *>(monitor);
+
         jit = make_jit(cb, tlb_obj, cp15, &monitor_bb->monitor_);
+        jit->SetAsid(0);
     }
 
     dynarmic_core::~dynarmic_core() {
@@ -360,7 +362,7 @@ namespace eka2l1::arm {
             ctx.cpu_registers[i] = get_reg(i);
         }
 
-        ctx.wrwr = cb->get_cp15()->get_wrwr();
+        ctx.uprw = cb->get_cp15()->get_uprw();
     }
 
     void dynarmic_core::load_context(const thread_context &ctx) {
@@ -369,7 +371,7 @@ namespace eka2l1::arm {
         }
 
         set_cpsr(ctx.cpsr);
-        cb->get_cp15()->set_wrwr(ctx.wrwr);
+        cb->get_cp15()->set_uprw(ctx.uprw);
     }
 
     bool dynarmic_core::is_thumb_mode() {
@@ -420,18 +422,6 @@ namespace eka2l1::arm {
 
     std::uint32_t dynarmic_core::get_num_instruction_executed() {
         return ticks_executed;
-    }
-
-    void dynarmic_core::set_asid(std::uint8_t num) {
-        return jit->SetAsid(num);
-    }
-
-    std::uint8_t dynarmic_core::get_asid() const {
-        return jit->Asid();
-    }
-
-    std::uint8_t dynarmic_core::get_max_asid_available() const {
-        return jit->MaxAsidAvailable();
     }
 
     dynarmic_exclusive_monitor::dynarmic_exclusive_monitor(const std::size_t processor_count)

@@ -41,7 +41,7 @@
 
 ANativeWindow *s_surf;
 std::unique_ptr<eka2l1::android::emulator> state;
-bool inited;
+bool inited = false;
 
 extern "C" jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     eka2l1::common::jni::virtual_machine = vm;
@@ -91,11 +91,15 @@ Java_com_github_eka2l1_emu_Emulator_getApps(
 }
 
 static void redraw_screens_immediately() {
+    state->graphics_driver->wait_for(&state->present_status);
+
     eka2l1::drivers::graphics_command_builder builder;
     state->launcher->draw(builder, state->winserv ? state->winserv->get_screens() : nullptr,
                           state->window->window_fb_size().x,
                           state->window->window_fb_size().y);
-    builder.present(nullptr);
+
+    state->present_status = -100;
+    builder.present(&state->present_status);
 
     eka2l1::drivers::command_list retrieved = builder.retrieve_command_list();
     state->graphics_driver->submit_command_list(retrieved);
@@ -104,7 +108,6 @@ static void redraw_screens_immediately() {
 extern "C" JNIEXPORT void JNICALL
 Java_com_github_eka2l1_emu_Emulator_launchApp(JNIEnv *env, jclass clazz, jint uid) {
     // Launch the real app...
-    redraw_screens_immediately();
     state->launcher->launch_app(uid);
 }
 
@@ -119,6 +122,11 @@ Java_com_github_eka2l1_emu_Emulator_surfaceChanged(JNIEnv *env, jclass clazz, jo
     } else {
         start_threads(*state);
     }
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_github_eka2l1_emu_Emulator_surfaceRedrawNeeded(JNIEnv *env, jclass clazz) {
     redraw_screens_immediately();
 }
 
@@ -138,8 +146,8 @@ Java_com_github_eka2l1_emu_Emulator_pressKey(JNIEnv *env, jclass clazz, jint key
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_github_eka2l1_emu_Emulator_touchScreen(JNIEnv *env, jclass clazz, jint x, jint y,
-    jint action) {
-    touch_screen(*state, x, y, action);
+    jint z, jint action, jint pointer_id) {
+    touch_screen(*state, x, y, z, action, pointer_id);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -315,4 +323,12 @@ Java_com_github_eka2l1_emu_Emulator_runTest(JNIEnv *env, jclass clazz, jstring t
     env->ReleaseStringUTFChars(test_name, test_name_c);
 
     return result;
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_github_eka2l1_emu_Emulator_submitInput(JNIEnv *env, jclass clazz, jstring text) {
+    const char *cstr = env->GetStringUTFChars(text, nullptr);
+    std::string ctext = std::string(cstr);
+    state->launcher->on_finished_text_input(ctext, false);
 }

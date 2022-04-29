@@ -369,6 +369,17 @@ namespace eka2l1 {
         std::uint32_t address_offset;
     };
 
+    // Used in Belle and Anna
+    struct bmp_specs_v2 {
+        eka2l1::vec2 size_pixels;
+        eka2l1::vec2 size_twips;
+        epoc::display_mode bpp; // Ignore
+        std::uint32_t bitmap_uid;
+        std::uint32_t data_size_force;
+    };
+
+    static_assert(sizeof(bmp_specs_v2) == 28);
+
     struct bmp_specs_legacy {
         eka2l1::vec2 size;
         epoc::display_mode bpp; // Ignore
@@ -758,7 +769,8 @@ namespace eka2l1 {
         header.bit_per_pixels = epoc::get_bpp_from_display_mode(info.dpm_);
 
         // Skip reserved spaces.
-        const std::size_t reserved_bytes = (bws_bmp->byte_width_ * final_reserve_each_side);
+        const std::size_t byte_width_calc = epoc::get_byte_width(header.size_pixels.width(), static_cast<std::uint8_t>(header.bit_per_pixels));
+        const std::size_t reserved_bytes = (byte_width_calc * final_reserve_each_side);
         if (data) {
             data = reinterpret_cast<std::uint8_t *>(data) + reserved_bytes;
         }
@@ -830,18 +842,38 @@ namespace eka2l1 {
 
     void fbscli::create_bitmap(service::ipc_context *ctx) {
         bmp_specs_legacy specs;
+
         const bool use_spec_legacy = ctx->get_argument_data_size(0) >= sizeof(bmp_specs_legacy);
+        const bool use_bmp_handles_writeback = (server<fbs_server>()->get_system()->get_symbian_version_use()
+            >= epocver::epoc10);
 
         if (!use_spec_legacy) {
-            std::optional<bmp_specs> specs_morden = ctx->get_argument_data_from_descriptor<bmp_specs>(0);
+            if (use_bmp_handles_writeback) {
+                std::optional<bmp_specs_v2> specs_morden_v2 = ctx->get_argument_data_from_descriptor<bmp_specs_v2>(0);
+                if (!specs_morden_v2.has_value()) {
+                    ctx->complete(epoc::error_argument);
+                    return;
+                }
 
-            if (!specs_morden) {
-                ctx->complete(epoc::error_argument);
-                return;
+                specs.size = specs_morden_v2->size_pixels;
+                specs.bpp = specs_morden_v2->bpp;
+
+                static constexpr std::uint32_t NORMAL_BITMAP_UID_REV2 = 0x9A2C;
+
+                if (specs_morden_v2->bitmap_uid != NORMAL_BITMAP_UID_REV2) {
+                    LOG_WARN(SERVICE_FBS, "Trying to create non-standard bitmap with UID 0x{:X}! Revisit soon!", specs_morden_v2->bitmap_uid);
+                }
+            } else {
+                std::optional<bmp_specs> specs_morden = ctx->get_argument_data_from_descriptor<bmp_specs>(0);
+
+                if (!specs_morden) {
+                    ctx->complete(epoc::error_argument);
+                    return;
+                }
+
+                specs.size = specs_morden->size;
+                specs.bpp = specs_morden->bpp;
             }
-
-            specs.size = specs_morden->size;
-            specs.bpp = specs_morden->bpp;
         } else {
             std::optional<bmp_specs_legacy> specs_legacy = ctx->get_argument_data_from_descriptor<bmp_specs_legacy>(0);
 
@@ -871,9 +903,6 @@ namespace eka2l1 {
         const std::uint32_t addr_off = fbss->host_ptr_to_guest_shared_offset(bmp->bitmap_);
 
         // From Anna the slot to write this moved to 1.
-        const bool use_bmp_handles_writeback = (server<fbs_server>()->get_system()->get_symbian_version_use()
-            >= epocver::epoc10);
-        ;
 
         if (use_spec_legacy) {
             specs.handle = handle_ret;
@@ -1250,9 +1279,14 @@ namespace eka2l1 {
                         break;
 
                     case bitmap_file_twenty_four_bit_rle_compression:
+                    case bitmap_file_thirty_two_u_bit_rle_compression:
                         decompress_rle<24>(reinterpret_cast<common::ro_stream *>(&source),
                             reinterpret_cast<common::wo_stream *>(&decomp_dest_stream));
                         break;
+
+                    case bitmap_file_thirty_two_a_bit_rle_compression:
+                        decompress_rle<32>(reinterpret_cast<common::ro_stream *>(&source),
+                            reinterpret_cast<common::wo_stream *>(&decomp_dest_stream));
 
                     default:
                         LOG_ERROR(SERVICE_FBS, "Unsupported compression type {}", header.compression);
@@ -1278,7 +1312,12 @@ namespace eka2l1 {
                         break;
 
                     case bitmap_file_twenty_four_bit_rle_compression:
+                    case bitmap_file_thirty_two_u_bit_rle_compression:
                         decompress_rle_fast_route<24>(source_data.data(), source_data.size(), decomp_data.data(), final_size);
+                        break;
+
+                    case bitmap_file_thirty_two_a_bit_rle_compression:
+                        decompress_rle_fast_route<32>(source_data.data(), source_data.size(), decomp_data.data(), final_size);
                         break;
 
                     default:
@@ -1292,7 +1331,13 @@ namespace eka2l1 {
             }
 
             current_to_look->seek(0, common::seek_where::beg);
-            const epoc::display_mode dpm = get_display_mode_from_bpp(header.bit_per_pixels, header.color);
+            epoc::display_mode dpm = get_display_mode_from_bpp(header.bit_per_pixels, header.color);
+
+            // Unused top byte. Just make it rgb24 then!
+            if ((comp == bitmap_file_thirty_two_u_bit_rle_compression) && (dpm == epoc::display_mode::color16ma)) {
+                dpm = epoc::display_mode::color16m;
+                byte_width = header.size_pixels.x * 3;
+            }
 
             switch (dpm) {
             case epoc::display_mode::color256:
@@ -1388,6 +1433,26 @@ namespace eka2l1 {
                 }
 
                 break;
+
+            case epoc::display_mode::color16ma: {
+                for (std::size_t y = 0; y < header.size_pixels.y; y++) {    
+                    current_to_look->seek(y * byte_width, common::seek_where::beg);
+
+                    for (std::size_t x = 0; x < header.size_pixels.x; x++) {
+                        std::uint8_t base[4];
+                        if (current_to_look->read(base, 4) != 3) {
+                            return false;
+                        }
+
+                        dest.write(base + 2, 1);
+                        dest.write(base + 1, 1);
+                        dest.write(base, 1);
+                        dest.write(base + 3, 1);
+                    }
+                }
+
+                break;
+            }
 
             case epoc::display_mode::gray256:
                 for (std::size_t y = 0; y < header.size_pixels.y; y++) {

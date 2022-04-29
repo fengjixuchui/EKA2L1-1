@@ -127,7 +127,7 @@ namespace eka2l1::arm {
             std::uint32_t cpsr;
             std::array<std::uint32_t, 64> fpu_registers;
             std::uint32_t fpscr;
-            std::uint32_t wrwr;
+            std::uint32_t uprw;
 
             void set_pc(const std::uint32_t value) {
                 cpu_registers[15] = value;
@@ -198,10 +198,6 @@ namespace eka2l1::arm {
         virtual bool should_clear_old_memory_map() const {
             return true;
         }
-
-        virtual void set_asid(std::uint8_t num) = 0;
-        virtual std::uint8_t get_asid() const = 0;
-        virtual std::uint8_t get_max_asid_available() const = 0;
 
         virtual std::uint32_t get_num_instruction_executed() = 0;
     };

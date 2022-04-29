@@ -27,6 +27,7 @@
 #include <drivers/audio/dsp.h>
 #include <drivers/audio/player.h>
 #include <dispatch/video.h>
+#include <dispatch/hui.h>
 
 #include <drivers/itc.h>
 
@@ -233,8 +234,12 @@ namespace eka2l1::dispatch {
         dsp_manager dsp_manager_;
         screen_post_transferer post_transferer_;
         egl_controller egl_controller_;
+        ehui_controller hui_controller_;
 
         std::map<std::uint32_t, address> static_string_addrs_;
+        std::map<std::string, address> symbol_lookup_;
+
+        bool graphics_string_added_;
 
     public:
         window_server *winserv_;
@@ -249,7 +254,7 @@ namespace eka2l1::dispatch {
         void set_graphics_driver(drivers::graphics_driver *driver);
         void shutdown(drivers::graphics_driver *driver);
 
-        bool patch_libraries(const std::u16string &path, patch_info *patches,
+        bool patch_libraries(const std::u16string &path, const patch_info *patches,
             const std::size_t patch_count);
 
         void resolve(eka2l1::system *sys, const std::uint32_t function_ord);
@@ -267,7 +272,12 @@ namespace eka2l1::dispatch {
             return egl_controller_;
         }
 
+        ehui_controller &get_hui_controller() {
+            return hui_controller_;
+        }
+
         address add_static_string(const std::uint32_t key, const std::string &value);
         address retrieve_static_string(const std::uint32_t key);
+        address lookup_dispatcher_function_by_symbol(const char *symbol);
     };
 }

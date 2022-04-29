@@ -53,11 +53,13 @@ set(PROJECT_SOURCES
         include/qt/cmdhandler.h
         include/qt/device_install_dialog.h
         include/qt/displaywidget.h
+        include/qt/input_dialog_driver.h
         include/qt/mainwindow.h
         include/qt/package_manager_dialog.h
         include/qt/seh_handler.h
         include/qt/settings_dialog.h
         include/qt/state.h
+        include/qt/symbian_input_dialog.h
         include/qt/thread.h
         include/qt/utils.h
         src/aboutdialog.cpp
@@ -67,6 +69,7 @@ set(PROJECT_SOURCES
         src/device_install_dialog.cpp
         src/device_install_dialog.ui
         src/displaywidget.cpp
+        src/input_dialog_driver.cpp
         src/main.cpp
         src/mainwindow.cpp
         src/mainwindow.ui
@@ -76,6 +79,8 @@ set(PROJECT_SOURCES
         src/settings_dialog.cpp
         src/settings_dialog.ui
         src/state.cpp
+        src/symbian_input_dialog.cpp
+        src/symbian_input_dialog.ui
         src/thread.cpp
         src/utils.cpp
         ${RESOURCE_FILES}
@@ -135,7 +140,17 @@ set_target_properties(eka2l1_qt PROPERTIES OUTPUT_NAME eka2l1_qt
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
         RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin")
 
-add_dependencies(eka2l1_qt ecam scdv mediaclientaudio mediaclientaudiostream mediaclientvideo vibractrl backlightctrl postingsurfacefactory goommonitor)
+add_dependencies(eka2l1_qt
+    avkonfep
+    ecam
+    scdv
+    mediaclientaudio
+    mediaclientaudiostream
+    mediaclientvideo
+    vibractrl
+    backlightctrl
+    postingsurfacefactory
+    goommonitor)
 
 add_custom_command(
         TARGET eka2l1_qt
@@ -147,6 +162,7 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:eka2l1_qt>/compat"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/miscs/panic/panic.json" "$<TARGET_FILE_DIR:eka2l1_qt>"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/miscs/utils/leavehook.py" "$<TARGET_FILE_DIR:eka2l1_qt>/scripts/disabled/"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/scripts/" "$<TARGET_FILE_DIR:eka2l1_qt>/scripts/"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/gl/" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/upscale/" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/upscale/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/defaultbank.hsb" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
@@ -237,10 +253,7 @@ if(QT_VERSION_MAJOR EQUAL 6)
 endif()
 
 if (WIN32)
-    if (NO_TERMINAL_FOR_UI)
-        set_property(TARGET eka2l1_qt PROPERTY WIN32_EXECUTABLE true)
-    endif()
-
+    set_property(TARGET eka2l1_qt PROPERTY WIN32_EXECUTABLE true)
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${QT_BIN_DIR}")
 
     add_custom_command(

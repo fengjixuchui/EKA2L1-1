@@ -17,6 +17,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <android/input_dialog.h>
 #include <android/state.h>
 #include <common/algorithm.h>
 #include <common/fileutils.h>
@@ -100,18 +101,7 @@ namespace eka2l1::android {
 
         if (stage_two_inited) {
             register_draw_callback();
-
-            kernel_system *kern = symsys->get_kernel_system();
-            hle::lib_manager *libmngr = kern->get_lib_manager();
-            dispatch::dispatcher *disp = the_sys->get_dispatcher();
-
-            // Start the bootload
-            kern->start_bootload();
-
-            libmngr->load_patch_libraries(PATCH_FOLDER_PATH);
-            dispatch::libraries::register_functions(kern, disp);
-
-            service::init_services_post_bootup(the_sys);
+            the_sys->initialize_user_parties();
         }
     }
 
@@ -119,12 +109,15 @@ namespace eka2l1::android {
         // Initialize the logger
         log::setup_log(nullptr);
 
-        LOG_INFO(FRONTEND_CMDLINE, "EKA2L1 v0.0.1 ({}-{})", GIT_BRANCH, GIT_COMMIT_HASH);
-
         // Start to read the configs
         conf.deserialize();
-        app_settings = std::make_unique<config::app_settings>(&conf);
+        if (log::filterings) {
+            log::filterings->parse_filter_string(conf.log_filter);
+        }
 
+        LOG_INFO(FRONTEND_CMDLINE, "EKA2L1 v0.0.1 ({}-{})", GIT_BRANCH, GIT_COMMIT_HASH);
+
+        app_settings = std::make_unique<config::app_settings>(&conf);
         system_create_components comp;
         comp.audio_ = nullptr;
         comp.graphics_ = nullptr;
@@ -161,6 +154,7 @@ namespace eka2l1::android {
         first_time = true;
 
         launcher = std::make_unique<eka2l1::android::launcher>(symsys.get());
+        eka2l1::drivers::ui::launcher_instance = launcher.get();
 
         stage_two_inited = false;
     }
@@ -211,19 +205,7 @@ namespace eka2l1::android {
             }
 
             symsys->set_sensor_driver(sensor_driver.get());
-
-            // Load patch libraries
-            kernel_system *kern = symsys->get_kernel_system();
-            hle::lib_manager *libmngr = kern->get_lib_manager();
-            dispatch::dispatcher *disp = symsys->get_dispatcher();
-
-            // Start the bootload
-            kern->start_bootload();
-
-            libmngr->load_patch_libraries(PATCH_FOLDER_PATH);
-            dispatch::libraries::register_functions(kern, disp);
-
-            service::init_services_post_bootup(symsys.get());
+            symsys->initialize_user_parties();
 
             io_system *io = symsys->get_io_system();
 
@@ -260,7 +242,8 @@ namespace eka2l1::android {
 
             // Copy additional DLLs
             std::vector<std::tuple<std::u16string, std::string, epocver>> dlls_need_to_copy = {
-                { u"Z:\\sys\\bin\\goommonitor.dll", "patch\\goommonitor_general.dll", epocver::epoc94 }
+                { u"Z:\\sys\\bin\\goommonitor.dll", "patch\\goommonitor_general.dll", epocver::epoc94 },
+                { u"Z:\\sys\\bin\\avkonfep.dll", "patch\\avkonfep_general.dll", epocver::epoc93fp1 }
             };
 
             for (std::size_t i = 0; i < dlls_need_to_copy.size(); i++) {
@@ -270,9 +253,19 @@ namespace eka2l1::android {
                 }
 
                 std::u16string org_file_path = std::get<0>(dlls_need_to_copy[i]);
-                auto where_to_copy = io->get_raw_path(eka2l1::file_directory(org_file_path));
+                auto where_to_copy = io->get_raw_path(org_file_path);
+
                 if (where_to_copy.has_value()) {
-                    common::copy_file(std::get<1>(dlls_need_to_copy[i]), common::ucs2_to_utf8(where_to_copy.value()), true);
+                    std::string where_to_copy_u8 = common::ucs2_to_utf8(where_to_copy.value());
+                    std::string where_to_backup_u8 = where_to_copy_u8 + ".bak";
+                    if (common::exists(where_to_copy_u8) && !common::exists(where_to_backup_u8)) {
+                        common::move_file(where_to_copy_u8, where_to_copy_u8 + ".bak");
+                    }
+                    std::string source_copy = std::get<1>(dlls_need_to_copy[i]);
+                    std::string current_dir;
+                    common::get_current_directory(current_dir);
+                    source_copy = eka2l1::absolute_path(source_copy, current_dir);
+                    common::copy_file(source_copy, where_to_copy_u8, true);
                 }
             }
 

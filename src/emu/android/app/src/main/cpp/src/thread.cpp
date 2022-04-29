@@ -19,6 +19,7 @@
 
 #include <android/thread.h>
 #include <common/thread.h>
+#include <drivers/audio/audio.h>
 #include <drivers/graphics/graphics.h>
 
 std::unique_ptr<std::thread> os_thread_obj;
@@ -60,6 +61,8 @@ namespace eka2l1::android {
                 state.pause_graphics_sema.wait();
             }
         });
+
+        state.graphics_init_done.set();
         return 0;
     }
 
@@ -129,7 +132,9 @@ namespace eka2l1::android {
         }
 
         // Run graphics driver on main entry.
+        state.graphics_init_done.reset();
         gr_thread_obj = std::make_unique<std::thread>(graphics_driver_thread, std::ref(state));
+        state.graphics_init_done.wait();
 
         return result;
     }
@@ -144,11 +149,27 @@ namespace eka2l1::android {
         state.should_graphics_pause = false;
         state.pause_graphics_sema.notify();
         state.pause_sema.notify();
+
+        if (state.sensor_driver) {
+            state.sensor_driver->resume();
+        }
+
+        if (state.audio_driver) {
+            state.audio_driver->resume();
+        }
     }
 
     void pause_threads(emulator &state) {
         state.should_emu_pause = true;
         state.should_graphics_pause = true;
+
+        if (state.sensor_driver) {
+            state.sensor_driver->pause();
+        }
+
+        if (state.audio_driver) {
+            state.audio_driver->suspend();
+        }
     }
 
     void press_key(emulator &state, int key, int key_state) {
@@ -159,11 +180,13 @@ namespace eka2l1::android {
         state.winserv->queue_input_from_driver(evt);
     }
 
-    void touch_screen(emulator &state, int x, int y, int action) {
+    void touch_screen(emulator &state, int x, int y, int z, int action, int pointer_id) {
         eka2l1::drivers::input_event evt;
         evt.type_ = eka2l1::drivers::input_event_type::touch;
         evt.mouse_.pos_x_ = static_cast<int>(x);
         evt.mouse_.pos_y_ = static_cast<int>(y);
+        evt.mouse_.pos_z_ = static_cast<int>(z);
+        evt.mouse_.mouse_id = static_cast<std::uint32_t>(pointer_id);
         evt.mouse_.button_ = eka2l1::drivers::mouse_button::mouse_button_left;
         evt.mouse_.action_ = static_cast<eka2l1::drivers::mouse_action>(action);
         state.winserv->queue_input_from_driver(evt);

@@ -209,6 +209,18 @@ namespace eka2l1 {
             return 32;
 #endif
         }
+        
+        int find_least_significant_bit_one(const std::uint64_t v) {
+#if defined(__GNUC__) || defined(__clang__)
+            int res = __builtin_ffsll(static_cast<long long>(v));
+            return (res <= 0) ? 64 : (res - 1);
+#elif defined(_MSC_VER)
+            DWORD lz = 64;
+            _BitScanForward64(&lz, v);
+
+            return lz;
+#endif
+        }
 
         int find_most_significant_bit_one(const std::uint32_t v) {
             return 32 - count_leading_zero(v);

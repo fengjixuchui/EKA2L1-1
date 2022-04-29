@@ -54,8 +54,10 @@ namespace eka2l1::mem::flexible {
             page_bma_ = std::make_unique<common::bitmap_allocator>(total_pages_occupied);
 
         permission_ = create_info.perm;
+        is_addr_shared_ = (create_info.flags & MEM_MODEL_CHUNK_REGION_USER_CODE) || (create_info.flags & MEM_MODEL_CHUNK_REGION_USER_ROM) ||
+            (create_info.flags & MEM_MODEL_CHUNK_REGION_KERNEL_MAPPING);
 
-        if (!owner_) {
+        if (is_addr_shared_) {
             // Treats this as for kernel
             control_flexible *fl_control = reinterpret_cast<control_flexible *>(control_);
             fixed_mapping_ = std::make_unique<mapping>(fl_control->kern_addr_space_.get());
@@ -68,9 +70,11 @@ namespace eka2l1::mem::flexible {
         return 0;
     }
 
-    std::size_t flexible_mem_model_chunk::commit(const vm_address offset, const std::size_t size) {
-        int total_page_to_commit = static_cast<int>((size + control_->page_size() - 1) >> control_->page_size_bits_);
+    std::size_t flexible_mem_model_chunk::commit(const vm_address offset, const std::size_t size) { 
         const vm_address dropping_place = static_cast<vm_address>(offset >> control_->page_size_bits_);
+        const vm_address dropping_place_end = static_cast<vm_address>((offset + size + control_->page_size() - 1) >> control_->page_size_bits_);
+
+        int total_page_to_commit = static_cast<int>(dropping_place_end - dropping_place);
 
         // Change the protection of the correspond region in memory object.
         if (!mem_obj_->commit(dropping_place, total_page_to_commit, permission_)) {
@@ -78,7 +82,7 @@ namespace eka2l1::mem::flexible {
             return 0;
         }
 
-        committed_ += (total_page_to_commit - (page_bma_ ? (page_bma_->allocated_count(dropping_place, dropping_place + total_page_to_commit - 1)) : 0)) << control_->page_size_bits_;
+        committed_ += (total_page_to_commit - (page_bma_ ? (page_bma_->allocated_count(dropping_place, dropping_place_end - 1)) : 0)) << control_->page_size_bits_;
 
         // Force fill as allocated
         if (page_bma_) {
@@ -89,8 +93,10 @@ namespace eka2l1::mem::flexible {
     }
 
     void flexible_mem_model_chunk::decommit(const vm_address offset, const std::size_t size) {
-        const std::size_t total_page_to_decommit = (size + control_->page_size() - 1) >> control_->page_size_bits_;
         const vm_address dropping_place = static_cast<vm_address>(offset >> control_->page_size_bits_);
+        const vm_address dropping_place_end = static_cast<vm_address>((offset + size + control_->page_size() - 1) >> control_->page_size_bits_);
+
+        int total_page_to_decommit = static_cast<int>(dropping_place_end - dropping_place);
 
         // Change the protection of the correspond region in memory object.
         if (!mem_obj_->decommit(dropping_place, total_page_to_decommit)) {
@@ -106,7 +112,7 @@ namespace eka2l1::mem::flexible {
         committed_ -= static_cast<std::uint32_t>(total_page_to_decommit << control_->page_size_bits_);
     }
 
-    bool flexible_mem_model_chunk::allocate(const std::size_t size) {
+    std::int32_t flexible_mem_model_chunk::allocate(const std::size_t size) {
         const int total_page_to_allocate = static_cast<int>((size + control_->page_size() - 1) >> control_->page_size_bits_);
         int page_allocated = total_page_to_allocate;
 
@@ -119,11 +125,13 @@ namespace eka2l1::mem::flexible {
                 page_bma_->deallocate(page_offset, page_allocated);
             }
 
-            return false;
+            return -2;
         }
 
-        commit(page_offset << control_->page_size_bits_, size);
-        return true;
+        std::uint32_t offset_to_commit_bytes = static_cast<std::uint32_t>(page_offset << control_->page_size_bits_);
+        commit(offset_to_commit_bytes, size);
+
+        return static_cast<std::int32_t>(offset_to_commit_bytes);
     }
 
     void flexible_mem_model_chunk::unmap_from_cpu(mem_model_process *pr, mmu_base *mmu) {
@@ -137,12 +145,16 @@ namespace eka2l1::mem::flexible {
     }
 
     const vm_address flexible_mem_model_chunk::base(mem_model_process *process) {
-        if (!process) {
-            if (fixed_mapping_) {
-                return fixed_mapping_->base_;
-            }
-
+        if (!process && fixed_addr_) {
             return fixed_addr_;
+        }
+
+        if (is_addr_shared_ && fixed_mapping_) {
+            return fixed_mapping_->base_;
+        }
+
+        if (!process) {
+            return INVALID_ADDR;
         }
 
         // Find our attacher

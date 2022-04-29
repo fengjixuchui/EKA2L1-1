@@ -29,7 +29,7 @@
 namespace eka2l1::kernel {
     codeseg::codeseg(kernel_system *kern, const std::string &name, codeseg_create_info &info)
         : kernel_obj(kern, name, nullptr, kernel::access_type::global_access)
-        , export_table_fixed_(false)
+        , patched_(false)
         , code_chunk_shared(nullptr) {
         obj_type = kernel::object_type::codeseg;
 
@@ -147,10 +147,15 @@ namespace eka2l1::kernel {
                 code_chunk = code_chunk_shared;
                 need_patch_and_reloc = false;
 
+                code_chunk->open_to(new_foe);
                 the_addr_of_code_run = code_chunk->base(new_foe).ptr_address();
             } else {
-                code_chunk = kern->create<kernel::chunk>(mem, new_foe, "", 0, code_size_align, code_size_align, prot_read_write_exec, kernel::chunk_type::normal,
+                code_chunk = kern->create<kernel::chunk>(mem, code_chunk_for_reuse ? nullptr : new_foe, "", 0, code_size_align, code_size_align, prot_read_write_exec, kernel::chunk_type::normal,
                     kernel::chunk_access::code, kernel::chunk_attrib::none);
+
+                if (!code_chunk_for_reuse) {    
+                    code_chunk->open_to(new_foe);
+                }
 
                 the_addr_of_code_run = code_chunk->base(new_foe).ptr_address();
 
@@ -509,6 +514,10 @@ namespace eka2l1::kernel {
     }
 
     std::uint32_t codeseg::get_exception_descriptor(kernel::process *pr) {
+        if (code_addr != 0) {
+            return exception_descriptor;
+        }
+
         // Find our stuffs
         auto attach_info_ptr = common::find_and_ret_if(attaches, [=](const std::unique_ptr<attached_info> &info) {
             return info->attached_process == pr;
@@ -523,7 +532,7 @@ namespace eka2l1::kernel {
     }
 
     address codeseg::get_entry_point(kernel::process *pr) {
-        if (code_addr != 0) {
+        if ((code_addr != 0) || patched_) {
             return ep;
         }
 
@@ -550,7 +559,7 @@ namespace eka2l1::kernel {
     address codeseg::lookup(kernel::process *pr, const std::uint32_t ord) {
         const address lookup_res = lookup_no_relocate(ord);
 
-        if (code_addr != 0 || !lookup_res || export_table_fixed_) {
+        if (code_addr != 0 || !lookup_res || patched_) {
             return lookup_res;
         }
 
@@ -565,7 +574,7 @@ namespace eka2l1::kernel {
         return attach_info->get()->code_chunk->base(pr).ptr_address() + lookup_res - code_base;
     }
 
-    void codeseg::queries_call_list(kernel::process *pr, std::vector<std::uint32_t> &call_list) {
+    void codeseg::queries_call_list(kernel::process *pr, std::vector<std::uint32_t> &call_list, const bool for_init) {
         // Add forced entry points
         call_list.insert(call_list.end(), premade_eps.begin(), premade_eps.end());
 
@@ -573,12 +582,36 @@ namespace eka2l1::kernel {
         for (auto &dependency : dependencies) {
             if (!dependency.dep_->mark) {
                 dependency.dep_->mark = true;
-                dependency.dep_->queries_call_list(pr, call_list);
+                dependency.dep_->queries_call_list(pr, call_list, for_init);
             }
         }
 
         // Add our last. Don't change order, this is how it supposed to be
-        call_list.push_back(get_entry_point(pr));
+        if (!ep_disabled_) {
+            auto attach_info = common::find_and_ret_if(attaches, [=](const std::unique_ptr<attached_info> &info) {
+                return info->attached_process == pr;
+            });
+
+            if (attach_info != nullptr) {
+                bool can_push = false;
+                if (for_init) {
+                    if ((attach_info->get()->flags & attached_info::FLAG_EP_QUERIED) == 0) {
+                        attach_info->get()->flags |= attached_info::FLAG_EP_QUERIED;
+                        can_push = true;
+                    }
+                } else {
+                    can_push = true;
+                }
+
+                if (can_push) {
+                    if ((code_addr != 0) || patched_) {
+                        call_list.push_back(ep);
+                    } else {
+                        call_list.push_back(attach_info->get()->code_chunk->base(pr).ptr_address() + ep);
+                    }
+                }
+            }
+        }
     }
 
     void codeseg::unmark() {
@@ -639,8 +672,16 @@ namespace eka2l1::kernel {
         export_table[ordinal - 1] = address.ptr_address();
     }
 
-    void codeseg::set_export_table_fixed(const bool is_fixed) {
-        export_table_fixed_ = is_fixed;
+    void codeseg::set_entry_point(eka2l1::ptr<void> address) {
+        ep = address.ptr_address();
+    }
+
+    void codeseg::set_patched() {
+        patched_ = true;
+    }
+
+    void codeseg::set_entry_point_disabled() {
+        ep_disabled_ = true;
     }
 
     bool codeseg::add_premade_entry_point(const address addr) {

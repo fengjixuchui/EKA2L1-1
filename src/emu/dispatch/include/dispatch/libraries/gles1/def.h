@@ -80,6 +80,7 @@ namespace eka2l1::dispatch {
         std::uint32_t wrap_s_;
         std::uint32_t wrap_t_;
         std::uint32_t mip_count_;
+        float max_anisotrophy_;
 
         bool auto_regen_mipmap_;
 
@@ -147,6 +148,14 @@ namespace eka2l1::dispatch {
 
         void set_auto_regenerate_mipmap(const bool opt) {
             auto_regen_mipmap_ = opt;
+        }
+
+        float max_anisotrophy() const {
+            return max_anisotrophy_;
+        }
+
+        void set_max_anisotrophy(const float val) {
+            max_anisotrophy_ = val;
         }
 
         eka2l1::vec2 size() const {
@@ -317,6 +326,7 @@ namespace eka2l1::dispatch {
 
         std::stack<glm::mat4> model_view_mat_stack_;
         std::stack<glm::mat4> proj_mat_stack_;
+        std::array<glm::mat4, GLES1_EMU_MAX_PALETTE_MATRICES> palette_mats_; 
 
         gles_texture_unit texture_units_[GLES1_EMU_MAX_TEXTURE_COUNT];
 
@@ -325,6 +335,7 @@ namespace eka2l1::dispatch {
         std::uint32_t active_mat_stack_;
         std::uint32_t binded_array_buffer_handle_;
         std::uint32_t binded_element_array_buffer_handle_;
+        std::uint32_t current_palette_mat_index_;
 
         drivers::rendering_face active_cull_face_;
         drivers::rendering_face_determine_rule active_front_face_rule_;
@@ -383,6 +394,11 @@ namespace eka2l1::dispatch {
             VERTEX_STATE_CLIENT_TEXCOORD5_ARRAY = 1 << 11,
             VERTEX_STATE_CLIENT_TEXCOORD6_ARRAY = 1 << 12,
             VERTEX_STATE_CLIENT_TEXCOORD7_ARRAY = 1 << 13,
+            VERTEX_STATE_CLIENT_MATRIX_INDEX_ARRAY = 1 << 14,
+            VERTEX_STATE_CLIENT_WEIGHT_ARRAY = 1 << 15,
+            VERTEX_STATE_SKINNING_ENABLE = 1 << 16,
+            VERTEX_STATE_SKIN_WEIGHTS_PER_VERTEX_BITS_POS = 17,
+            VERTEX_STATE_SKIN_WEIGHTS_PER_VERTEX_MASK = 0b11 << 17,
             VERTEX_STATE_REVERSED_BITS_POS = 54,
 
             NON_SHADER_STATE_BLEND_ENABLE = 1 << 0,
@@ -410,16 +426,21 @@ namespace eka2l1::dispatch {
             STATE_CHANGED_LINE_WIDTH = 1 << 8,
             STATE_CHANGED_DEPTH_MASK = 1 << 9,
             STATE_CHANGED_DEPTH_PASS_COND = 1 << 10,
-            STATE_CHANGED_DEPTH_RANGE = 1 << 11
+            STATE_CHANGED_DEPTH_RANGE = 1 << 11,
+            STATE_CHANGED_STENCIL_FUNC = 1 << 12,
+            STATE_CHANGED_STENCIL_OP = 1 << 13
         };
 
         gles1_vertex_attrib vertex_attrib_;
         gles1_vertex_attrib color_attrib_;
         gles1_vertex_attrib normal_attrib_;
+        gles1_vertex_attrib matrix_index_attrib_;
+        gles1_vertex_attrib weight_attrib_;
         drivers::handle input_desc_;
 
         bool attrib_changed_;
         std::int32_t previous_first_index_;
+        std::uint32_t skin_weights_per_ver;
 
         float color_uniforms_[4];
         float normal_uniforms_[3];
@@ -461,6 +482,12 @@ namespace eka2l1::dispatch {
         std::uint32_t stencil_mask_;
         std::uint32_t depth_mask_;
         std::uint32_t depth_func_;
+        std::uint32_t stencil_func_;
+        std::uint32_t stencil_func_mask_;
+        std::int32_t stencil_func_ref_;
+        std::uint32_t stencil_fail_action_;
+        std::uint32_t stencil_depth_fail_action_;
+        std::uint32_t stencil_depth_pass_action_;
 
         float alpha_test_ref_;
 
@@ -498,4 +525,14 @@ namespace eka2l1::dispatch {
     };
 
     egl_context_es1 *get_es1_active_context(system *sys);
+
+    /**
+     * @brief Get the extension string for ES1 layer.
+     * 
+     * This also accounts the extensions that the host GPU supports.
+     * 
+     * @param   driver            Graphic driver pointer.
+     * @return  The extension string.
+     */
+    std::string get_es1_extensions(drivers::graphics_driver *driver);
 }

@@ -347,6 +347,7 @@ namespace eka2l1::drivers {
 
         cmd->data_[0] = PACK_2U32_TO_U64(binding, var_type);
         cmd->data_[1] = make_data_copy(data, data_size);
+        cmd->data_[2] = data_size;
     }
 
     void graphics_command_builder::bind_texture(drivers::handle h, const int binding) {
@@ -679,5 +680,12 @@ namespace eka2l1::drivers {
         command *cmd = list_.retrieve_next();
         cmd->opcode_ = graphics_driver_set_depth_range;
         cmd->data_[0] = pack_from_two_floats(min, max);
+    }
+    
+    void graphics_command_builder::set_texture_anisotrophy(drivers::handle h, const float anisotrophy_fact) {
+        command *cmd = list_.retrieve_next();
+        cmd->opcode_ = graphics_driver_set_texture_anisotrophy;
+        cmd->data_[0] = h;
+        cmd->data_[1] = pack_from_two_floats(anisotrophy_fact, 0);
     }
 }

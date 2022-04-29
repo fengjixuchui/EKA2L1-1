@@ -7,10 +7,12 @@ cmake_minimum_required(VERSION 3.8)
 
 add_library(native-lib SHARED
         include/android/emu_window_android.h
+        include/android/input_dialog.h
         include/android/launcher.h
         include/android/state.h
         include/android/thread.h
         src/emu_window_android.cpp
+        src/input_dialog.cpp
         src/launcher.cpp
         src/state.cpp
         src/thread.cpp
@@ -33,7 +35,17 @@ target_link_libraries(native-lib PRIVATE
         yaml-cpp)
 
 target_include_directories(native-lib PRIVATE include)
-add_dependencies(native-lib ecam scdv mediaclientaudio mediaclientaudiostream mediaclientvideo vibractrl backlightctrl postingsurfacefactory goommonitor)
+add_dependencies(native-lib
+        avkonfep
+        ecam
+        scdv
+        mediaclientaudio
+        mediaclientaudiostream
+        mediaclientvideo
+        vibractrl
+        backlightctrl
+        postingsurfacefactory
+        goommonitor)
 
 set(ASSETS_DIR "${PROJECT_SOURCE_DIR}/src/emu/android/app/src/main/assets")
 
@@ -52,6 +64,8 @@ endif()
 add_custom_command(
         TARGET native-lib
         PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${ASSETS_DIR}/scripts"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${ASSETS_DIR}/scripts/disabled"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${ASSETS_DIR}/compat"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${ASSETS_DIR}/resources"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${ASSETS_DIR}/resources/upscale"
@@ -60,5 +74,6 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/gles/" "${ASSETS_DIR}/resources"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/upscale/" "${ASSETS_DIR}/resources/upscale"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/config/compat/" "${ASSETS_DIR}/compat"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/scripts/" "${ASSETS_DIR}/scripts/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/defaultbank.hsb" "${ASSETS_DIR}/resources"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/defaultbank.sf2" "${ASSETS_DIR}/resources")

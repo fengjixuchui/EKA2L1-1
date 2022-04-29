@@ -28,6 +28,7 @@ _LIT(KBacklightCat, "Backlight");
 _LIT(KCameraCat, "Camera");
 _LIT(KScdvCat, "SCDV-HLE");
 _LIT(KPostingSurfaceCat, "PostingSurface");
+_LIT(KAvkonFepCat, "AVKONFEP");
 
 void LogOut(const TDesC &aCategory, const TDesC &aMessage, ...);
 

@@ -14,9 +14,9 @@ INST(arm_BX,            "BX",                  "cccc000100101111111111110001mmmm
 // Coprocessor instructions
 //INST(arm_CDP,           "CDP",                 "cccc1110ooooNNNNDDDDppppooo0MMMM") // v2  (CDP2:  v5)
 //INST(arm_LDC,           "LDC",                 "cccc110pudw1nnnnDDDDppppvvvvvvvv") // v2  (LDC2:  v5)
-//INST(arm_MCR,           "MCR",                 "cccc1110ooo0NNNNttttppppooo1MMMM") // v2  (MCR2:  v5)
+INST(arm_MCR,           "MCR",                 "cccc1110ooo0NNNNttttppppooo1MMMM") // v2  (MCR2:  v5)
 //INST(arm_MCRR,          "MCRR",                "cccc11000100uuuuttttppppooooMMMM") // v5E (MCRR2: v6)
-//INST(arm_MRC,           "MRC",                 "cccc1110ooo1NNNNttttppppooo1MMMM") // v2  (MRC2:  v5)
+INST(arm_MRC,           "MRC",                 "cccc1110ooo1NNNNttttppppooo1MMMM") // v2  (MRC2:  v5)
 //INST(arm_MRRC,          "MRRC",                "cccc11000101uuuuttttppppooooMMMM") // v5E (MRRC2: v6)
 //INST(arm_STC,           "STC",                 "cccc110pudw0nnnnDDDDppppvvvvvvvv") // v2  (STC2:  v5)
 
@@ -79,15 +79,15 @@ INST(arm_UDF,           "UDF",                 "111001111111------------1111----
 INST(arm_SXTB,          "SXTB",                "cccc011010101111ddddrr000111mmmm") // v6
 //INST(arm_SXTB16,        "SXTB16",              "cccc011010001111ddddrr000111mmmm") // v6
 INST(arm_SXTH,          "SXTH",                "cccc011010111111ddddrr000111mmmm") // v6
-//INST(arm_SXTAB,         "SXTAB",               "cccc01101010nnnnddddrr000111mmmm") // v6
+INST(arm_SXTAB,         "SXTAB",               "cccc01101010nnnnddddrr000111mmmm") // v6
 //INST(arm_SXTAB16,       "SXTAB16",             "cccc01101000nnnnddddrr000111mmmm") // v6
-//INST(arm_SXTAH,         "SXTAH",               "cccc01101011nnnnddddrr000111mmmm") // v6
+INST(arm_SXTAH,         "SXTAH",               "cccc01101011nnnnddddrr000111mmmm") // v6
 INST(arm_UXTB,          "UXTB",                "cccc011011101111ddddrr000111mmmm") // v6
 //INST(arm_UXTB16,        "UXTB16",              "cccc011011001111ddddrr000111mmmm") // v6
 INST(arm_UXTH,          "UXTH",                "cccc011011111111ddddrr000111mmmm") // v6
-//INST(arm_UXTAB,         "UXTAB",               "cccc01101110nnnnddddrr000111mmmm") // v6
+INST(arm_UXTAB,         "UXTAB",               "cccc01101110nnnnddddrr000111mmmm") // v6
 //INST(arm_UXTAB16,       "UXTAB16",             "cccc01101100nnnnddddrr000111mmmm") // v6
-//INST(arm_UXTAH,         "UXTAH",               "cccc01101111nnnnddddrr000111mmmm") // v6
+INST(arm_UXTAH,         "UXTAH",               "cccc01101111nnnnddddrr000111mmmm") // v6
 
 // Hint instructions
 INST(arm_PLD_imm,       "PLD (imm)",           "11110101uz01nnnn1111iiiiiiiiiiii") // v5E for PLD; v7 for PLDW
@@ -138,7 +138,7 @@ INST(arm_LDRB_imm,      "LDRB (imm)",          "cccc010pu1w1nnnnttttvvvvvvvvvvvv
 INST(arm_LDRB_reg,      "LDRB (reg)",          "cccc011pu1w1nnnnttttvvvvvrr0mmmm")
 //INST(arm_LDRD_lit,      "LDRD (lit)",          "cccc0001u1001111ttttvvvv1101vvvv")
 INST(arm_LDRD_imm,      "LDRD (imm)",          "cccc000pu1w0nnnnttttvvvv1101vvvv") // v5E
-//INST(arm_LDRD_reg,      "LDRD (reg)",          "cccc000pu0w0nnnntttt00001101mmmm") // v5E
+INST(arm_LDRD_reg,      "LDRD (reg)",          "cccc000pu0w0nnnntttt00001101mmmm") // v5E
 //INST(arm_LDRH_lit,      "LDRH (lit)",          "cccc000pu1w11111ttttvvvv1011vvvv")
 INST(arm_LDRH_imm,      "LDRH (imm)",          "cccc000pu1w1nnnnttttvvvv1011vvvv")
 INST(arm_LDRH_reg,      "LDRH (reg)",          "cccc000pu0w1nnnntttt00001011mmmm")
@@ -153,7 +153,7 @@ INST(arm_STR_reg,       "STR (reg)",           "cccc011pu0w0nnnnttttvvvvvrr0mmmm
 INST(arm_STRB_imm,      "STRB (imm)",          "cccc010pu1w0nnnnttttvvvvvvvvvvvv")
 INST(arm_STRB_reg,      "STRB (reg)",          "cccc011pu1w0nnnnttttvvvvvrr0mmmm")
 INST(arm_STRD_imm,      "STRD (imm)",          "cccc000pu1w0nnnnttttvvvv1111vvvv") // v5E
-//INST(arm_STRD_reg,      "STRD (reg)",          "cccc000pu0w0nnnntttt00001111mmmm") // v5E
+INST(arm_STRD_reg,      "STRD (reg)",          "cccc000pu0w0nnnntttt00001111mmmm") // v5E
 INST(arm_STRH_imm,      "STRH (imm)",          "cccc000pu1w0nnnnttttvvvv1011vvvv")
 INST(arm_STRH_reg,      "STRH (reg)",          "cccc000pu0w0nnnntttt00001011mmmm")
 
@@ -190,9 +190,9 @@ INST(arm_PKHBT,         "PKHBT",               "cccc01101000nnnnddddvvvvv001mmmm
 INST(arm_PKHTB,         "PKHTB",               "cccc01101000nnnnddddvvvvv101mmmm") // v6K
 
 // Reversal instructions
-//INST(arm_RBIT,          "RBIT",                "cccc011011111111dddd11110011mmmm") // v6T2
-//INST(arm_REV,           "REV",                 "cccc011010111111dddd11110011mmmm") // v6
-//INST(arm_REV16,         "REV16",               "cccc011010111111dddd11111011mmmm") // v6
+INST(arm_RBIT,          "RBIT",                "cccc011011111111dddd11110011mmmm") // v6T2
+INST(arm_REV,           "REV",                 "cccc011010111111dddd11110011mmmm") // v6
+INST(arm_REV16,         "REV16",               "cccc011010111111dddd11111011mmmm") // v6
 //INST(arm_REVSH,         "REVSH",               "cccc011011111111dddd11111011mmmm") // v6
 
 // Saturation instructions
@@ -223,8 +223,8 @@ INST(arm_SMLAxy,        "SMLAXY",              "cccc00010000ddddaaaammmm1xy0nnnn
 INST(arm_SMULxy,        "SMULXY",              "cccc00010110dddd0000mmmm1xy0nnnn") // v5xP
 
 // Multiply (Word by Halfword) instructions
-//INST(arm_SMLAWy,        "SMLAWY",              "cccc00010010ddddaaaammmm1y00nnnn") // v5xP
-//INST(arm_SMULWy,        "SMULWY",              "cccc00010010dddd0000mmmm1y10nnnn") // v5xP
+INST(arm_SMLAWy,        "SMLAWY",              "cccc00010010ddddaaaammmm1y00nnnn") // v5xP
+INST(arm_SMULWy,        "SMULWY",              "cccc00010010dddd0000mmmm1y10nnnn") // v5xP
 
 // Multiply (Most Significant Word) instructions
 //INST(arm_SMMUL,         "SMMUL",               "cccc01110101dddd1111mmmm00R1nnnn") // v6

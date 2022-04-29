@@ -20,6 +20,7 @@
 #include <config/config.h>
 #include <dispatch/dispatcher.h>
 #include <dispatch/libraries/register.h>
+#include <dispatch/libraries/gles1/def.h>
 #include <dispatch/register.h>
 #include <dispatch/screen.h>
 #include <kernel/kernel.h>
@@ -45,7 +46,8 @@ namespace eka2l1::dispatch {
         , trampoline_allocated_(0)
         , static_data_allocated_(0)
         , winserv_(nullptr)
-        , egl_controller_(nullptr) {
+        , egl_controller_(nullptr)
+        , graphics_string_added_(false) {
         trampoline_chunk_ = kern->create<kernel::chunk>(kern->get_memory_system(), nullptr, "DispatcherTrampolines", 0,
             MAX_TRAMPOLINE_CHUNK_SIZE, MAX_TRAMPOLINE_CHUNK_SIZE, prot_read_write_exec, kernel::chunk_type::normal,
             kernel::chunk_access::rom, kernel::chunk_attrib::none);
@@ -64,21 +66,25 @@ namespace eka2l1::dispatch {
         kern_ = kern;
 
         post_transferer_.construct(timing_);
-
-        // Add static strings
-        add_static_string(GLES1_STATIC_STRING_KEY_VENDOR, GLES1_STATIC_STRING_VENDOR);
-        add_static_string(GLES1_STATIC_STRING_KEY_RENDERER, GLES1_STATIC_STRING_RENDERER);
-        add_static_string(GLES1_STATIC_STRING_KEY_EXTENSIONS, GLES1_STATIC_STRING_EXTENSIONS);
-        add_static_string(GLES1_STATIC_STRING_KEY_VERSION, GLES1_STATIC_STRING_VERSION);
-        add_static_string(EGL_VENDOR_EMU, EGL_STATIC_STRING_VENDOR);
-        add_static_string(EGL_VERSION_EMU, EGL_STATIC_STRING_VERSION);
-        add_static_string(EGL_EXTENSIONS_EMU, EGL_STATIC_STRING_EXTENSION);
     }
 
     dispatcher::~dispatcher() {
     }
     
     void dispatcher::set_graphics_driver(drivers::graphics_driver *driver) {
+        if (!graphics_string_added_) {
+            // Add static strings
+            add_static_string(GLES1_STATIC_STRING_KEY_VENDOR, GLES1_STATIC_STRING_VENDOR);
+            add_static_string(GLES1_STATIC_STRING_KEY_RENDERER, GLES1_STATIC_STRING_RENDERER);
+            add_static_string(GLES1_STATIC_STRING_KEY_EXTENSIONS, dispatch::get_es1_extensions(driver));
+            add_static_string(GLES1_STATIC_STRING_KEY_VERSION, GLES1_STATIC_STRING_VERSION);
+            add_static_string(EGL_VENDOR_EMU, EGL_STATIC_STRING_VENDOR);
+            add_static_string(EGL_VERSION_EMU, EGL_STATIC_STRING_VERSION);
+            add_static_string(EGL_EXTENSIONS_EMU, EGL_STATIC_STRING_EXTENSION);
+
+            graphics_string_added_ = true;
+        }
+
         egl_controller_.set_graphics_driver(driver);
     }
 
@@ -90,7 +96,7 @@ namespace eka2l1::dispatch {
             return;
         }
 
-        dispatch_find_result->second(sys, sys->get_kernel_system()->crr_process(), sys->get_cpu());
+        dispatch_find_result->second.first(sys, sys->get_kernel_system()->crr_process(), sys->get_cpu());
     }
 
     void dispatcher::shutdown(drivers::graphics_driver *driver) {
@@ -137,7 +143,7 @@ namespace eka2l1::dispatch {
         return ite->second;
     }
 
-    bool dispatcher::patch_libraries(const std::u16string &path, patch_info *patches,
+    bool dispatcher::patch_libraries(const std::u16string &path, const patch_info *patches,
         const std::size_t patch_count) {
         codeseg_ptr seg = libmngr_->load(path);
 
@@ -145,9 +151,8 @@ namespace eka2l1::dispatch {
             return false;
         }
 
-        if (!seg->is_rom()) {
-            seg->set_export_table_fixed(true);
-        }
+        seg->set_patched();
+        seg->set_entry_point_disabled();
 
         for (std::size_t i = 0; i < patch_count; i++) {
             const address orgaddr = seg->lookup_no_relocate(patches[i].ordinal_number_);
@@ -188,11 +193,30 @@ namespace eka2l1::dispatch {
 
             // TODO!!! Export table is fixed as a whole, not as an individual, this is bad for HLEing only some functions!
             seg->set_export(patches[i].ordinal_number_, entryentry);
+            
+            // Check if symbols exist for this libraries
+            auto ite = dispatch::dispatch_funcs.find(patches[i].dispatch_number_);
+            if ((ite != dispatch::dispatch_funcs.end()) && (ite->second.second != nullptr)) {
+                symbol_lookup_.emplace(ite->second.second, entryentry);
+            }
 
             trampoline_allocated_ += 12;
         }
 
         return true;
+    }
+
+    address dispatcher::lookup_dispatcher_function_by_symbol(const char *symbol) {
+        if (!symbol) {
+            return 0;
+        }
+
+        auto ite = symbol_lookup_.find(symbol);
+        if (ite == symbol_lookup_.end()) {
+            return 0;
+        }
+
+        return ite->second;
     }
 }
 

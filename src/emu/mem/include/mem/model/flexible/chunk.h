@@ -44,6 +44,7 @@ namespace eka2l1::mem::flexible {
 
         vm_address fixed_addr_;
         std::unique_ptr<mapping> fixed_mapping_;
+        bool is_addr_shared_;
 
     public:
         explicit flexible_mem_model_chunk(control_base *control, const asid id);
@@ -66,7 +67,7 @@ namespace eka2l1::mem::flexible {
         std::size_t commit(const vm_address offset, const std::size_t size) override;
         void decommit(const vm_address offset, const std::size_t size) override;
 
-        bool allocate(const std::size_t size) override;
+        std::int32_t allocate(const std::size_t size) override;
 
         void unmap_from_cpu(mem_model_process *pr, mmu_base *mmu) override;
         void map_to_cpu(mem_model_process *pr, mmu_base *mmu) override;
