@@ -23,6 +23,7 @@
 #include <services/accessory/accessory.h>
 #include <services/alarm/alarm.h>
 #include <services/applist/applist.h>
+#include <services/audio/alf/alf.h>
 #include <services/audio/keysound/keysound.h>
 #include <services/audio/mmf/audio.h>
 #include <services/audio/mmf/dev.h>
@@ -165,6 +166,11 @@ namespace eka2l1::epoc {
 
         lang.am_pm_table = eka2l1::ptr<char>(kern->put_static_array(am_pm_names_addr, 2));
 
+        epoc::locale_locale_settings locale_settings;
+        locale_settings.locale_extra_settings_dll_ptr = 0;
+        locale_settings.currency_symbols[0] = '$';
+        locale_settings.currency_symbols[1] = '\0';
+
         // Unknown key, testing show that this prop return 65535 most of times
         // The prop belongs to HAL server, but the key usuage is unknown. (TODO)
         DEFINE_INT_PROP_D(sys, epoc::SYS_CATEGORY, epoc::UNK_KEY1, 65535);
@@ -177,6 +183,7 @@ namespace eka2l1::epoc {
 
         DEFINE_BIN_PROP(sys, epoc::SYS_CATEGORY, epoc::LOCALE_LANG_KEY, sizeof(epoc::locale_language), lang);
         DEFINE_BIN_PROP(sys, epoc::SYS_CATEGORY, epoc::LOCALE_DATA_KEY, sizeof(epoc::locale), locale);
+        DEFINE_BIN_PROP(sys, epoc::SYS_CATEGORY, epoc::LOCALE_LOCALE_SETTINGS_KEY, sizeof(epoc::locale_locale_settings), locale_settings);
     }
 }
 
@@ -236,6 +243,7 @@ namespace eka2l1 {
             CREATE_SERVER(sys, system_agent_server);
             CREATE_SERVER(sys, unipertar_server);
             CREATE_SERVER(sys, goom_monitor_server);
+            CREATE_SERVER(sys, alf_streamer_server);
 
             // MMF server family
             {

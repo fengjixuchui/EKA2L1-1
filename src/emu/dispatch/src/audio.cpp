@@ -134,7 +134,7 @@ namespace eka2l1::dispatch {
             return epoc::error_bad_handle;
         }
 
-        if (eplayer->impl_->is_playing()) {
+        if (eplayer->impl_ && eplayer->impl_->is_playing()) {
             eplayer->impl_->stop();
             manager.audio_renderer_semaphore()->release(eplayer);
         }
@@ -531,7 +531,9 @@ namespace eka2l1::dispatch {
             return epoc::error_bad_handle;
         }
 
-        eplayer->impl_->set_position(pos_in_micros);
+        if (eplayer->impl_)
+            eplayer->impl_->set_position(pos_in_micros);
+
         return epoc::error_none;
     }
 
@@ -651,6 +653,12 @@ namespace eka2l1::dispatch {
 
         if (!stream->ll_stream_->stop()) {
             return epoc::error_general;
+        }
+
+        // Return value >= 0 indicates the behaviour of calling MaoscPlayComplete. 0 means call.
+        // See the impl.cpp file for a more detailed explaination on why
+        if (sys->get_symbian_version_use() <= epocver::epoc6) {
+            return 1;
         }
 
         manager.audio_renderer_semaphore()->release(stream);
@@ -792,6 +800,22 @@ namespace eka2l1::dispatch {
         }
 
         stream->ll_stream_->reset_stat();
+        return epoc::error_none;
+    }
+    
+    BRIDGE_FUNC_DISPATCHER(std::int32_t, eaudio_dsp_stream_set_format, eka2l1::ptr<void> handle, const std::int32_t four_cc) {
+        dispatch::dispatcher *dispatcher = sys->get_dispatcher();
+        dispatch::dsp_manager &manager = dispatcher->get_dsp_manager();
+        dsp_epoc_stream *stream = manager.get_object<dsp_epoc_stream>(handle.ptr_address());
+
+        if (!stream) {
+            return epoc::error_bad_handle;
+        }
+
+        if (!stream->ll_stream_->format(four_cc)) {
+            return epoc::error_not_supported;
+        }
+
         return epoc::error_none;
     }
 }

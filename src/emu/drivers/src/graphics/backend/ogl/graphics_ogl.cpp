@@ -27,6 +27,7 @@
 #include <drivers/graphics/backend/ogl/common_ogl.h>
 #include <drivers/graphics/backend/ogl/graphics_ogl.h>
 #include <drivers/graphics/backend/ogl/buffer_ogl.h>
+#include <drivers/graphics/backend/ogl/fb_ogl.h>
 #include <glad/glad.h>
 
 #if EKA2L1_PLATFORM(ANDROID)
@@ -641,11 +642,11 @@ namespace eka2l1::drivers {
         }
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(draw_texture->texture_handle()));
+        glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(draw_texture->driver_handle()));
 
         if (mask_draw_texture) {
             glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(mask_draw_texture->texture_handle()));
+            glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(mask_draw_texture->driver_handle()));
         }
 
         if (source_rect.size.x == 0) {
@@ -1002,6 +1003,18 @@ namespace eka2l1::drivers {
         case blend_factor::frag_out_alpha_saturate:
             return GL_SRC_ALPHA_SATURATE;
 
+        case blend_factor::constant_colour:
+            return GL_CONSTANT_COLOR;
+
+        case blend_factor::one_minus_constant_colour:
+            return GL_ONE_MINUS_CONSTANT_COLOR;
+
+        case blend_factor::constant_alpha:
+            return GL_CONSTANT_ALPHA;
+
+        case blend_factor::one_minus_constant_alpha:
+            return GL_ONE_MINUS_CONSTANT_ALPHA;
+
         default:
             break;
         }
@@ -1339,41 +1352,62 @@ namespace eka2l1::drivers {
     }
 
     void ogl_graphics_driver::set_uniform(command &cmd) {
-        drivers::shader_set_var_type var_type;
+        drivers::shader_var_type var_type;
         std::uint8_t *data = reinterpret_cast<std::uint8_t*>(cmd.data_[1]);
         int binding = 0;
 
         unpack_u64_to_2u32(cmd.data_[0], binding, var_type);
 
         switch (var_type) {
-        case shader_set_var_type::integer: {
+        case shader_var_type::integer: {
             glUniform1iv(binding, static_cast<GLsizei>((cmd.data_[2] + 3) / 4), reinterpret_cast<const GLint *>(data));
             delete[] data;
 
             return;
         }
 
-        case shader_set_var_type::real:
+        case shader_var_type::real:
             glUniform1fv(binding, static_cast<GLsizei>((cmd.data_[2] + 3) / 4), reinterpret_cast<const GLfloat*>(data));
             delete[] data;
 
             return;
 
-        case shader_set_var_type::mat4: {
+        case shader_var_type::mat2: {
+            glUniformMatrix2fv(binding, static_cast<GLsizei>((cmd.data_[2] + 15) / 16), GL_FALSE, reinterpret_cast<const GLfloat *>(data));
+            delete[] data;
+
+            return;
+        }
+
+        case shader_var_type::mat3: {
+            glUniformMatrix2fv(binding, static_cast<GLsizei>((cmd.data_[2] + 35) / 36), GL_FALSE, reinterpret_cast<const GLfloat *>(data));
+            delete[] data;
+
+            return;
+        }
+
+        case shader_var_type::mat4: {
             glUniformMatrix4fv(binding, static_cast<GLsizei>((cmd.data_[2] + 63) / 64), GL_FALSE, reinterpret_cast<const GLfloat *>(data));
             delete[] data;
 
             return;
         }
 
-        case shader_set_var_type::vec3: {
+        case shader_var_type::vec2: {
+            glUniform2fv(binding, static_cast<GLsizei>((cmd.data_[2] + 7) / 8), reinterpret_cast<const GLfloat *>(data));
+            delete[] data;
+
+            return;
+        }
+
+        case shader_var_type::vec3: {
             glUniform3fv(binding, static_cast<GLsizei>((cmd.data_[2] + 11) / 12), reinterpret_cast<const GLfloat *>(data));
             delete[] data;
 
             return;
         }
 
-        case shader_set_var_type::vec4: {
+        case shader_var_type::vec4: {
             glUniform4fv(binding, static_cast<GLsizei>((cmd.data_[2] + 15) / 16), reinterpret_cast<const GLfloat *>(data));
             delete[] data;
 
@@ -1521,6 +1555,56 @@ namespace eka2l1::drivers {
         texobj->bind(nullptr, 0);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, max_ani);
         texobj->unbind(nullptr);
+    }
+    
+    void ogl_graphics_driver::bind_framebuffer(command &cmd) {
+        drivers::handle h = cmd.data_[0];
+        drivers::framebuffer_bind_type bind_type = static_cast<drivers::framebuffer_bind_type>(cmd.data_[1]);
+
+        if (h == 0) {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            return;
+        }
+
+        drivers::framebuffer *fb = reinterpret_cast<drivers::framebuffer*>(get_graphics_object(h));
+        if (!fb) {
+            return;
+        }
+
+        fb->bind(this, bind_type);
+    }
+
+    void ogl_graphics_driver::set_blend_colour(command &cmd) {
+        float red, green, blue, alpha;
+        unpack_to_two_floats(cmd.data_[0], red, green);
+        unpack_to_two_floats(cmd.data_[1], blue, alpha);
+
+        glBlendColor(red, green, blue, alpha);
+    }
+
+    void ogl_graphics_driver::read_framebuffer(command &cmd) {
+        drivers::handle h = cmd.data_[0];
+        drivers::ogl_framebuffer *fb = nullptr;
+
+        if (h != 0) {
+            fb = reinterpret_cast<drivers::ogl_framebuffer*>(get_graphics_object(h));
+            if (!fb) {
+                return;
+            }
+        }
+
+        GLenum format = texture_format_to_gl_enum(static_cast<drivers::texture_format>(static_cast<std::uint32_t>(cmd.data_[1])));
+        GLenum type = texture_data_type_to_gl_enum(static_cast<drivers::texture_data_type>(static_cast<std::uint32_t>(cmd.data_[1] >> 32)));
+
+        GLint last_read_fb = 0;
+        std::int32_t x, y, width, height;
+        unpack_u64_to_2u32(cmd.data_[2], x, y);
+        unpack_u64_to_2u32(cmd.data_[3], width, height);
+
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &last_read_fb);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, fb ? fb->get_fbo() : 0);
+        glReadPixels(x, y, width, height, format, type, reinterpret_cast<std::uint64_t*>(cmd.data_[4]));
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, last_read_fb);
     }
 
     void ogl_graphics_driver::save_gl_state() {
@@ -1762,6 +1846,18 @@ namespace eka2l1::drivers {
 
         case graphics_driver_set_texture_anisotrophy:
             set_texture_anisotrophy(cmd);
+            break;
+
+        case graphics_driver_bind_framebuffer:
+            bind_framebuffer(cmd);
+            break;
+
+        case graphics_driver_set_blend_colour:
+            set_blend_colour(cmd);
+            break;
+
+        case graphics_driver_read_framebuffer:
+            read_framebuffer(cmd);
             break;
 
         default:

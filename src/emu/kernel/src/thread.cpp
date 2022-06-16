@@ -176,6 +176,7 @@ namespace eka2l1 {
 
             ctx.set_sp(stack_top);
             ctx.cpsr = ((ctx.get_pc() & 1) << 5);
+            ctx.fpscr = 0;
 
             ctx.cpu_registers[1] = stack_top;
 
@@ -215,6 +216,19 @@ namespace eka2l1 {
             memcpy(stack_host_ptr, &info, 0x40);
         }
 
+        static void wait_object_timeout_callback(uint64_t user, int ns_late) {
+            thread *thr = reinterpret_cast<thread *>(user);
+
+            if (!thr) {
+                return;
+            }
+
+            kernel_system *kern = thr->get_kernel_object_owner();
+            kern->lock();
+            thr->handle_wait_object_timeout();
+            kern->unlock();
+        }
+
         thread::thread(kernel_system *kern, memory_system *mem, ntimer *timing, kernel::process *owner,
             kernel::access_type access,
             const std::string &name, const address epa, const size_t stack_size_,
@@ -231,7 +245,6 @@ namespace eka2l1 {
             , mem(mem)
             , priority(pri)
             , timing(timing)
-            , timeout_sts(0)
             , wait_obj(nullptr)
             , sleep_nof_sts(0)
             , thread_handles(kern, handle_array_owner::thread)
@@ -246,7 +259,9 @@ namespace eka2l1 {
             , sleep_level(0)
             , metadata(nullptr)
             , backup_state(thread_state::stop)
-            , flags(0) {
+            , flags(0)
+            , wait_object_timeout_callback_type(0)
+            , is_in_timeout(false) {
             if (owner) {
                 owner->increase_thread_count();
 
@@ -256,10 +271,10 @@ namespace eka2l1 {
 
             increase_access_count();
 
-            create_time = timing->ticks();
+            create_time = timing->microseconds();
 
-            timeslice = 20000;
-            time = 20000;
+            timeslice = kern->capped_cpu_hz() * USER_THREAD_TIMESLICE_IN_MILLISECS / 1000;
+            time = timeslice;
 
             obj_type = object_type::thread;
             state = thread_state::create; // Suspended.
@@ -273,7 +288,7 @@ namespace eka2l1 {
             name_chunk = kern->create<kernel::chunk>(kern->get_memory_system(), owning_process(), "", 0, static_cast<std::uint32_t>(common::align(name.length() * 2 + 4, mem->get_page_size())), common::align(name.length() * 2 + 4, mem->get_page_size()), prot_read_write,
                 chunk_type::normal, chunk_access::local, chunk_attrib::none);
 
-            request_sema = kern->create<kernel::semaphore>("requestSema" + common::to_string(eka2l1::random()), 0);
+            request_sema = kern->create<kernel::semaphore>(owning_process(), "requestSema" + common::to_string(eka2l1::random()), 0);
 
             sync_msg = kern->create_msg(owner_type::kernel);
             sync_msg->type = ipc_message_type_sync;
@@ -331,7 +346,13 @@ namespace eka2l1 {
             }
 
             reset_thread_ctx(epa, stack_top, thread_free_modify_local_storage_vptr, initial);
+
             scheduler = kern->get_thread_scheduler();
+            wait_object_timeout_callback_type = timing->get_register_event("ThreadWaitObjectTimeoutCallbackType");
+
+            if (wait_object_timeout_callback_type == -1) {
+                wait_object_timeout_callback_type = timing->register_event("ThreadWaitObjectTimeoutCallbackType", wait_object_timeout_callback);
+            }
 
             // Add thread to process's thread list
             owner->get_thread_list().push(&process_thread_link);
@@ -345,6 +366,10 @@ namespace eka2l1 {
             kern->destroy(name_chunk);
             kern->destroy(local_data_chunk);
             kern->destroy(request_sema);
+
+            if (!kern->is_eka1()) {
+                timing->unschedule_event(wait_object_timeout_callback_type, reinterpret_cast<std::uint64_t>(this));
+            }
 
             if (owner) {
                 owner->decrease_access_count();
@@ -532,7 +557,7 @@ namespace eka2l1 {
 
             kernel::process *mama = owning_process();
 
-            if (mama->decrease_thread_count() == 0 || is_process_permanent() || ((exit_type == kernel::entity_exit_type::panic) && is_process_critical())) {
+            if ((mama->decrease_thread_count() == 0) || is_process_permanent() || ((exit_type == kernel::entity_exit_type::panic) && is_process_critical())) {
                 mama->kill(exit_type, exit_category, exit_reason);
             }
 
@@ -586,7 +611,7 @@ namespace eka2l1 {
         }
 
         void thread::wait_for_any_request() {
-            request_sema->wait();
+            request_sema->wait(0);
         }
 
         void thread::signal_request(int count) {
@@ -954,6 +979,56 @@ namespace eka2l1 {
                 kernel::codeseg::attached_info *info = E_LOFF(closing_libs.first()->deque(), kernel::codeseg::attached_info, closing_lib_link);
                 info->parent_seg->detach(info->attached_process);
             }
+        }
+
+        void thread::real_time_active_begin() {
+            last_run_time = timing->microseconds();
+        }
+
+        void thread::real_time_active_end() {
+            total_real_run_time += (timing->microseconds() - last_run_time);
+        }
+        
+        void thread::start_timeout(const std::uint32_t us) {
+            if (!is_in_timeout) {
+                timing->schedule_event(us, wait_object_timeout_callback_type, reinterpret_cast<std::uint64_t>(this));
+                is_in_timeout = true;
+            }
+        }
+        
+        void thread::end_timeout_early() {
+            if (is_in_timeout) {
+                timing->unschedule_event(wait_object_timeout_callback_type, reinterpret_cast<std::uint64_t>(this));
+                is_in_timeout = false;
+            }
+        }
+
+        void thread::handle_wait_object_timeout() {
+            // The wait object's native signal may got the upper hands
+            if (!is_in_timeout) {
+                return;
+            }
+
+            if (!wait_obj) {
+                LOG_ERROR(KERNEL, "A pending wait object timed out on thread {} where there's no wait object active!", name());
+                return;
+            }
+
+            if (!kern->is_eka1()) {
+                switch (wait_obj->get_object_type()) {
+                case kernel::object_type::sema:
+                    reinterpret_cast<kernel::semaphore*>(wait_obj)->timeouted(this);
+                    break;
+
+                default:
+                    break;
+                }
+
+                // Set the return value of the previous wait function to timed out
+                get_thread_context().cpu_registers[0] = epoc::error_timed_out;
+            }
+
+            is_in_timeout = false;
         }
     }
 

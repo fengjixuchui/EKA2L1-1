@@ -160,6 +160,7 @@ namespace eka2l1 {
         // Get base time
         base_time_ = common::get_current_utc_time_in_microseconds_since_0ad();
         utc_offset_ = common::get_current_utc_offset();
+        cpu_hz_ = DEFAULT_EMULATED_CPU_HZ;
 
         locale_ = std::make_unique<std::locale>("");
 
@@ -806,7 +807,10 @@ namespace eka2l1 {
             heap_min = imgs.first->header.heap_size_min;
             heap_max = imgs.first->header.heap_size_max;
 
+            // Insert search path (mainly for EKA1)
+            lib_mngr_->search_paths.insert(lib_mngr_->search_paths.begin(), eka2l1::file_directory(full_path, true));
             cs = lib_mngr_->load_as_e32img(*eimg, full_path);
+            lib_mngr_->search_paths.erase(lib_mngr_->search_paths.begin());
         }
 
         // Rom image

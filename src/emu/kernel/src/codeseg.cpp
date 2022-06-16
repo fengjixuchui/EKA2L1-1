@@ -23,6 +23,7 @@
 #include <kernel/codeseg.h>
 #include <kernel/kernel.h>
 #include <loader/common.h>
+#include <xxHash/xxhash.h>
 
 #include <algorithm>
 
@@ -30,7 +31,9 @@ namespace eka2l1::kernel {
     codeseg::codeseg(kernel_system *kern, const std::string &name, codeseg_create_info &info)
         : kernel_obj(kern, name, nullptr, kernel::access_type::global_access)
         , patched_(false)
-        , code_chunk_shared(nullptr) {
+        , code_chunk_shared(nullptr)
+        , hash_(0)
+        , hash_inited_(false) {
         obj_type = kernel::object_type::codeseg;
 
         std::copy(info.uids, info.uids + 3, uids);
@@ -571,6 +574,15 @@ namespace eka2l1::kernel {
             return 0;
         }
 
+        if ((lookup_res >= data_base) && (lookup_res < data_base + data_size + bss_size)) {
+            if (attach_info->get()->data_chunk) {
+                return attach_info->get()->data_chunk->base(pr).ptr_address() + lookup_res - data_base;
+            } else {
+                LOG_ERROR(KERNEL, "Export address is based on .data, but no data chunk is available!");
+                return 0;
+            }
+        }
+
         return attach_info->get()->code_chunk->base(pr).ptr_address() + lookup_res - code_base;
     }
 
@@ -655,10 +667,26 @@ namespace eka2l1::kernel {
         }
 
         std::vector<std::uint32_t> new_table = export_table;
-        const std::uint32_t delta = attach_info->get()->code_chunk->base(pr).ptr_address() - code_base;
+
+        const std::uint32_t delta_code = attach_info->get()->code_chunk->base(pr).ptr_address() - code_base;
+        std::uint32_t delta_data = 0;
+        bool delta_data_calced = false;
 
         for (auto &entry : new_table) {
-            entry += delta;
+            if ((entry >= data_base) && (entry < data_base + data_size + bss_size)) {
+                if (!delta_data_calced) {
+                    if (attach_info->get()->data_chunk) {
+                        delta_data = attach_info->get()->data_chunk->base(pr).ptr_address() - data_base;
+                    } else {
+                        LOG_ERROR(KERNEL, "Export address is based on .data, but no data chunk is available!");
+                    }
+                    delta_data_calced = true;
+                }
+
+                entry += delta_data;
+            } else {
+                entry += delta_code;
+            }
         }
 
         return new_table;
@@ -704,5 +732,24 @@ namespace eka2l1::kernel {
         }
 
         return processes;
+    }
+
+    void codeseg::calculate_hash() {
+        XXH32_state_t *state = XXH32_createState();
+
+        XXH32_reset(state, 0x5B001101);
+        XXH32_update(state, code_data.get(), code_size);
+
+        hash_ = XXH32_digest(state);
+        XXH32_freeState(state);
+    }
+
+    std::uint32_t codeseg::get_hash() {
+        if (!hash_inited_) {
+            calculate_hash();
+            hash_inited_ = true;
+        }
+
+        return hash_;
     }
 }

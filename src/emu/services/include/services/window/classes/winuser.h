@@ -27,6 +27,7 @@
 #include <common/linked.h>
 #include <common/region.h>
 
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -43,6 +44,12 @@ namespace eka2l1::epoc {
     struct graphic_context;
     struct window_group;
     struct dsa;
+    struct canvas_interface;
+
+    struct canvas_observer {
+    public:
+        virtual void on_window_size_changed(canvas_interface *obj) = 0;
+    };
 
     struct canvas_interface : public epoc::window {
         virtual std::uint32_t redraw_priority(int *shift = nullptr) = 0;
@@ -93,6 +100,7 @@ namespace eka2l1::epoc {
 
         drivers::graphics_command_builder driver_builder_;
         std::unique_ptr<epoc::gdi_store_command_segment> pending_segment_;
+        std::vector<canvas_observer*> observers_;
 
         explicit canvas_base(window_server_client_ptr client, screen *scr, window *parent, const epoc::window_type type_of_window, const epoc::display_mode dmode, const std::uint32_t client_handle);
         virtual ~canvas_base() override;
@@ -108,6 +116,9 @@ namespace eka2l1::epoc {
             return true;
         }
 
+        void add_canvas_observer(canvas_observer *ob);
+        void remove_canvas_observer(canvas_observer *ob);
+
         epoc::display_mode display_mode() const;
         eka2l1::vec2 absolute_position() const override;
         eka2l1::vec2 get_origin() override;
@@ -116,6 +127,7 @@ namespace eka2l1::epoc {
         eka2l1::rect bounding_rect() const;
         eka2l1::rect absolute_rect() const;
         eka2l1::vec2 size() const;
+        eka2l1::vec2 size_for_egl_surface() const;
 
         /**
          * \brief Set window extent in screen space.
@@ -176,6 +188,7 @@ namespace eka2l1::epoc {
         void scroll(service::ipc_context &context, ws_cmd &cmd);
         void set_shape(service::ipc_context &context, ws_cmd &cmd);
         void enable_visiblity_change_events(service::ipc_context &ctx, eka2l1::ws_cmd &cmd);
+        void fix_native_orientation(service::ipc_context &ctx, eka2l1::ws_cmd &cmd);
 
         epoc::window_group *get_group();
 

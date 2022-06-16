@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cpu/arm_interface.h>
+#include <cpu/dyncom/arm_dyncom.h>
 
 #include <dynarmic/A32/a32.h>
 #include <dynarmic/A32/config.h>
@@ -63,10 +64,13 @@ namespace eka2l1 {
             std::unique_ptr<Dynarmic::A32::Jit> jit;
             std::unique_ptr<dynarmic_core_callback> cb;
 
+            arm::dyncom_core interpreter;
             Dynarmic::TLB<9> tlb_obj;
 
             std::uint32_t ticks_executed{ 0 };
             std::uint32_t ticks_target{ 0 };
+
+            bool interpreter_callback_inited;
 
         public:
             explicit dynarmic_core(arm::exclusive_monitor *monitor);
@@ -92,6 +96,7 @@ namespace eka2l1 {
             uint32_t get_fpscr() override;
             uint32_t get_lr() override;
             void set_cpsr(uint32_t val) override;
+            void set_fpscr(uint32_t val) override;
 
             void save_context(thread_context &ctx) override;
             void load_context(const thread_context &ctx) override;

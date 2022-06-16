@@ -21,6 +21,7 @@
 #include <common/chunkyseri.h>
 #include <common/cvt.h>
 #include <common/log.h>
+#include <common/path.h>
 #include <config/app_settings.h>
 
 #include <kernel/kernel.h>
@@ -70,9 +71,7 @@ namespace eka2l1::kernel {
 
         // If this thread dies, processes booms
         primary_thread->set_process_permanent(true);
-        ++thread_count;
-
-        dll_lock = kern->create<kernel::mutex>(kern->get_ntimer(), "dllLockMutexProcess" + common::to_string(std::get<2>(uids)),
+        dll_lock = kern->create<kernel::mutex>(kern->get_ntimer(), this, "dllLockMutexProcess" + common::to_string(std::get<2>(uids)),
             false, kernel::access_type::local_access);
     }
 
@@ -110,6 +109,25 @@ namespace eka2l1::kernel {
         }
 
         exe_path = codeseg->get_full_path();
+
+        // EKA2 supports shortening executable path. If it's in /sys/bin/ then we can just shorten
+        // to drive and filename. Gameloft games relies on this (they use DriveAndPath to get the drive of the EXE, lol)
+        if (kern->get_epoc_version() >= epocver::eka2) {
+            const std::u16string rel_path = eka2l1::relative_path(exe_path, true);
+            
+            static const char16_t *PATH_SYS_BIN =  u"sys\\bin\\";
+            static const char16_t *PATH_SYSTEM_LIBS =  u"system\\libs\\";
+            static const char16_t *PATH_SYSTEM_PROGRAMS =  u"system\\programs\\";
+            static const std::size_t PATH_SYS_BIN_LEN = 8;
+            static const std::size_t PATH_SYSTEM_LIBS_LEN = 12;
+            static const std::size_t PATH_SYSTEM_PROGRAMS_LEN = 16;
+
+            if ((common::compare_ignore_case(rel_path.substr(0, PATH_SYS_BIN_LEN), PATH_SYS_BIN) == 0) ||
+                (common::compare_ignore_case(rel_path.substr(0, PATH_SYSTEM_LIBS_LEN), PATH_SYSTEM_LIBS) == 0) ||
+                (common::compare_ignore_case(rel_path.substr(0, PATH_SYSTEM_PROGRAMS_LEN), PATH_SYSTEM_PROGRAMS) == 0)) {
+                exe_path = eka2l1::root_name(exe_path, true) + u'\\' + eka2l1::filename(exe_path, true);
+            }
+        }
 
         // Base on: sprocess.cpp#L245 in kernelhwsrv package
         create_prim_thread(codeseg->get_code_run_addr(this), codeseg->get_entry_point(this), stack_size, heap_min, heap_max,
@@ -226,24 +244,12 @@ namespace eka2l1::kernel {
     }
 
     int process::destroy() {
-        kern->destroy(dll_lock);
-
         if (exit_type == entity_exit_type::pending) {
             kill(kernel::entity_exit_type::kill, u"Kill", 0);
         } else if (!kern->wipeout_in_progress()) {
             process_handles.reset();
         }
 
-        while (!codeseg_list.empty()) {
-            kernel::codeseg::attached_info *info = E_LOFF(codeseg_list.first()->deque(), kernel::codeseg::attached_info, process_link);
-            info->parent_seg->detach(this);
-        }
-
-        if (dll_static_chunk) {
-            kern->destroy(dll_static_chunk);
-        }
-
-        bss_man_.reset();
         return 0;
     }
 
@@ -446,6 +452,20 @@ namespace eka2l1::kernel {
             finish_logons();
             process_handles.reset();
         }
+
+        kern->destroy(dll_lock);
+
+        if (dll_static_chunk) {
+            kern->destroy(dll_static_chunk);
+        }
+
+        while (!codeseg_list.empty()) {
+            kernel::codeseg::attached_info *info = E_LOFF(codeseg_list.first()->deque(), kernel::codeseg::attached_info, process_link);
+            info->parent_seg->detach(this);
+        }
+
+        mm_impl_.reset();
+        bss_man_.reset();
 
         decrease_access_count();
     }

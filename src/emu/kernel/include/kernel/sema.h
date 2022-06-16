@@ -43,12 +43,12 @@ namespace eka2l1 {
                 obj_type = kernel::object_type::sema;
             }
 
-            semaphore(kernel_system *sys, std::string sema_name,
-                int32_t init_count,
-                kernel::access_type access = access_type::local_access);
+            semaphore(kernel_system *sys, kernel::process *owner, std::string sema_name, int32_t init_count, kernel::access_type access = access_type::local_access);
+            ~semaphore() override;
 
             void signal(int32_t signal_count);
-            void wait();
+            void timeouted(thread *thr);
+            void wait(const std::int32_t timeout_us = 0);
 
             bool suspend_waiting_thread(thread *thr);
             bool unsuspend_waiting_thread(thread *thr);

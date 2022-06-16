@@ -94,6 +94,8 @@ namespace eka2l1::arm {
         dynarmic_core &parent;
         std::uint64_t interpreted;
 
+        core::thread_context temp_context;
+
     public:
         explicit dynarmic_core_callback(dynarmic_core &parent, std::shared_ptr<dynarmic_core_cp15> cp15)
             : cp15(cp15)
@@ -221,7 +223,34 @@ namespace eka2l1::arm {
         }
 
         void InterpreterFallback(Dynarmic::A32::VAddr addr, size_t num_insts) override {
-            LOG_ERROR(CPU, "Interpreter fallback!");
+            if (!parent.interpreter_callback_inited) {
+                parent.interpreter.read_code = parent.read_code;
+                parent.interpreter.read_8bit = parent.read_8bit;
+                parent.interpreter.read_16bit = parent.read_16bit;
+                parent.interpreter.read_32bit = parent.read_32bit;
+                parent.interpreter.read_64bit = parent.read_64bit;
+
+                parent.interpreter.write_8bit = parent.write_8bit;
+                parent.interpreter.write_16bit = parent.write_16bit;
+                parent.interpreter.write_32bit = parent.write_32bit;
+                parent.interpreter.write_64bit = parent.write_64bit;
+
+                parent.interpreter.exception_handler = parent.exception_handler;
+                parent.interpreter.exclusive_write_8bit = parent.exclusive_write_8bit;
+                parent.interpreter.exclusive_write_16bit = parent.exclusive_write_16bit;
+                parent.interpreter.exclusive_write_32bit = parent.exclusive_write_32bit;
+                parent.interpreter.exclusive_write_64bit = parent.exclusive_write_64bit;
+                parent.interpreter_callback_inited = true;
+            }
+
+            parent.save_context(temp_context);
+            parent.interpreter.load_context(temp_context);
+
+            parent.interpreter.run(num_insts);
+            parent.interpreter.save_context(temp_context);
+            parent.load_context(temp_context);
+
+            interpreted += num_insts;
         }
 
         void ExceptionRaised(uint32_t pc, Dynarmic::A32::Exception exception) override {
@@ -276,7 +305,9 @@ namespace eka2l1::arm {
     }
 
     dynarmic_core::dynarmic_core(arm::exclusive_monitor *monitor)
-        : tlb_obj(12) {
+        : tlb_obj(12)
+        , interpreter(monitor, 12)
+        , interpreter_callback_inited(false) {
         std::shared_ptr<dynarmic_core_cp15> cp15 = std::make_shared<dynarmic_core_cp15>();
         cb = std::make_unique<dynarmic_core_callback>(*this, cp15);
 
@@ -317,7 +348,7 @@ namespace eka2l1::arm {
     }
 
     uint32_t dynarmic_core::get_vfp(size_t idx) {
-        return 0;
+        return jit->ExtRegs()[idx];
     }
 
     void dynarmic_core::set_reg(size_t idx, uint32_t val) {
@@ -337,6 +368,7 @@ namespace eka2l1::arm {
     }
 
     void dynarmic_core::set_vfp(size_t idx, uint32_t val) {
+        jit->ExtRegs()[idx] = val;
     }
 
     uint32_t dynarmic_core::get_lr() {
@@ -355,11 +387,20 @@ namespace eka2l1::arm {
         jit->SetCpsr(val);
     }
 
+    void dynarmic_core::set_fpscr(uint32_t val) {
+        jit->SetFpscr(val);
+    }
+
     void dynarmic_core::save_context(thread_context &ctx) {
         ctx.cpsr = get_cpsr();
+        ctx.fpscr = get_fpscr();
 
         for (uint8_t i = 0; i < 16; i++) {
             ctx.cpu_registers[i] = get_reg(i);
+        }
+
+        for (uint8_t i = 0; i < 64; i++) {
+            ctx.fpu_registers[i] = get_vfp(i);
         }
 
         ctx.uprw = cb->get_cp15()->get_uprw();
@@ -370,7 +411,13 @@ namespace eka2l1::arm {
             jit->Regs()[i] = ctx.cpu_registers[i];
         }
 
+        for (uint8_t i = 0; i < 64; i++) {
+            jit->ExtRegs()[i] = ctx.fpu_registers[i];
+        }
+
         set_cpsr(ctx.cpsr);
+        set_fpscr(ctx.fpscr);
+
         cb->get_cp15()->set_uprw(ctx.uprw);
     }
 

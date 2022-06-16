@@ -27,13 +27,15 @@
 
 namespace eka2l1 {
     namespace kernel {
-        semaphore::semaphore(kernel_system *sys, std::string sema_name,
-            int32_t init_count,
-            kernel::access_type access)
-            : kernel_obj(sys, std::move(sema_name), sys->crr_process(), access)
+        semaphore::semaphore(kernel_system *sys, kernel::process *owner, std::string sema_name,
+            int32_t init_count, kernel::access_type access)
+            : kernel_obj(sys, std::move(sema_name), owner, access)
             , avail_count(init_count)
             , signaling(false) {
             obj_type = object_type::sema;
+        }
+
+        semaphore::~semaphore() {
         }
 
         void semaphore::signal(int32_t signal_count) {
@@ -48,6 +50,7 @@ namespace eka2l1 {
 
                         assert(ready_thread->wait_obj == this);
 
+                        ready_thread->end_timeout_early();
                         ready_thread->get_scheduler()->dewait(ready_thread);
                         ready_thread->wait_obj = nullptr;
                     }
@@ -57,7 +60,7 @@ namespace eka2l1 {
             signaling = false;
         }
 
-        void semaphore::wait() {
+        void semaphore::wait(const std::int32_t timeout_us) {
             kernel::thread *calling_thr = kern->crr_thread();
 
             if (--avail_count < 0) {
@@ -68,7 +71,33 @@ namespace eka2l1 {
 
                 calling_thr->state = thread_state::wait_fast_sema;
                 calling_thr->wait_obj = this;
+
+                if (timeout_us) {
+                    calling_thr->start_timeout(timeout_us);
+                }
             }
+        }
+
+        void semaphore::timeouted(thread *thr) {
+            // Reset the thread's wait object and return back our semaphore count
+            thr->wait_obj = nullptr;
+
+            if (!thr->suspend_link.alone()) {
+                // It's still suspend, but not being bounded by the semaphore no more
+                thr->state = thread_state::wait;
+                thr->suspend_link.deque();
+
+                avail_count++;
+                return;
+            }
+
+            if (!waits.remove(thr)) {
+                LOG_ERROR(KERNEL, "Thread {} does not exist in wait queue!", thr->name());
+                return;
+            }
+
+            thr->get_scheduler()->dewait(thr);
+            avail_count++;
         }
 
         void semaphore::priority_change() {

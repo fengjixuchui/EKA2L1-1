@@ -266,7 +266,7 @@ namespace eka2l1::epoc::socket {
         }
 
         epoc::notify_info info(ctx->msg->request_sts, ctx->msg->own_thr);
-        sock_->send(packet_buffer, packet_size, size_return, optional_addr.has_value() ? &optional_addr.value() : nullptr,  flags.value(), info);
+        sock_->send(packet_buffer, static_cast<std::uint32_t>(packet_size), size_return, optional_addr.has_value() ? &optional_addr.value() : nullptr, flags.value(), info);
     }
 
     void socket_socket::recv(service::ipc_context *ctx, const bool has_return_length, const bool one_or_more, const bool has_addr) {
@@ -414,7 +414,7 @@ namespace eka2l1::epoc::socket {
                     recv(ctx, true, false, false);
                     return;
 
-                case socket_so_recv_one_or_more:
+                case socket_reform_so_recv_one_or_more:
                     recv(ctx, true, true, false);
                     return;
 
@@ -434,6 +434,10 @@ namespace eka2l1::epoc::socket {
                     sock_->cancel_connect();
                     ctx->complete(epoc::error_none);
 
+                    return;
+
+                case socket_reform_so_set_opt:
+                    set_option(ctx);
                     return;
 
                 default:

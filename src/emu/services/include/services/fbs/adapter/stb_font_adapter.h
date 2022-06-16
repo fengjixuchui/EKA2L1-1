@@ -38,11 +38,11 @@ namespace eka2l1::epoc::adapter {
         common::identity_container<std::unique_ptr<stbtt_pack_context>> contexts_;
 
         std::size_t count_;
-
         std::uint8_t flags_;
 
         enum {
-            FLAGS_CONTEXT_INITED = 1 << 0
+            FLAGS_CONTEXT_INITED = 1 << 0,
+            FLAG_SUPPORT_STRUCT_INITED = 1 << 1
         };
 
     protected:
@@ -93,5 +93,7 @@ namespace eka2l1::epoc::adapter {
         }
 
         bool has_character(const std::size_t face_index, const std::int32_t codepoint) override;
+        bool get_table_content(const std::size_t face_index, const std::uint32_t tag4, std::uint8_t *dest,
+            std::uint32_t &dest_size) override;
     };
 }

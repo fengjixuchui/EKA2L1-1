@@ -416,7 +416,7 @@ namespace eka2l1 {
     }
 
     void fbscli::num_typefaces(service::ipc_context *ctx) {
-        ctx->complete(static_cast<std::int32_t>(server<fbs_server>()->persistent_font_store.number_of_fonts()));
+        ctx->complete(static_cast<std::int32_t>(server<fbs_server>()->persistent_font_store.number_of_typefaces()));
     }
 
     void fbscli::typeface_support(service::ipc_context *ctx) {
@@ -429,35 +429,18 @@ namespace eka2l1 {
         }
 
         fbs_server *serv = server<fbs_server>();
-        epoc::open_font_info *info = serv->persistent_font_store.seek_the_font_by_id(font_idx.value());
+        epoc::typeface_support *support_stored = serv->persistent_font_store.get_typeface_support(font_idx.value());
 
-        if (!info) {
+        if (!support_stored) {
             ctx->complete(epoc::error_not_found);
             return;
         }
 
-        LOG_TRACE(SERVICE_FBS, "Basic information for Typeface support is provided, excluding number of heights and flags");
+        const epocver ver_sym = ctx->sys->get_symbian_version_use();
 
-        const int approxiate_twips_mul = epoc::get_approximate_pixel_to_twips_mul(serv->kern->get_epoc_version());
-
-        support->info_.name = info->face_attrib.name.to_std_string(nullptr);
-        support->info_.flags = 0;
-        support->max_height_in_twips_ = info->metrics.max_height * approxiate_twips_mul;
-        support->min_height_in_twips_ = info->face_attrib.min_size_in_pixels * approxiate_twips_mul;
-        support->num_heights_ = 1;
-        support->is_scalable_ = info->adapter->vectorizable();
-
-        if (info->face_attrib.style & epoc::open_font_face_attrib::serif) {
-            support->info_.flags |= epoc::typeface_info::tf_serif;
-        }
-
-        if (!(info->face_attrib.style & epoc::open_font_face_attrib::mono_width)) {
-            support->info_.flags |= epoc::typeface_info::tf_propotional;
-        }
-
-        if (info->face_attrib.style & epoc::open_font_face_attrib::symbol) {
-            support->info_.flags |= epoc::typeface_info::tf_symbol;
-        }
+        support.value() = *support_stored;
+        support->min_height_in_twips_ *= epoc::get_approximate_pixel_to_twips_mul(ver_sym);
+        support->max_height_in_twips_ *= epoc::get_approximate_pixel_to_twips_mul(ver_sym);
 
         ctx->write_data_to_descriptor_argument(1, support.value());
         ctx->complete(epoc::error_none);
@@ -505,8 +488,7 @@ namespace eka2l1 {
         info.scale_factor_y = scale_factor_y;
 
         static constexpr std::uint16_t MAX_TF_NAME = 24;
-        bmpfont->spec_in_twips.tf.name.assign(nullptr, reinterpret_cast<std::uint8_t *>(info.face_attrib.name.data),
-            MAX_TF_NAME * 2);
+        bmpfont->spec_in_twips.tf.name.assign(nullptr, info.face_attrib.fam_name.to_std_string(nullptr));
         bmpfont->spec_in_twips.tf.flags = spec.tf.flags;
 
         of->metrics = info.metrics;
@@ -1030,6 +1012,78 @@ namespace eka2l1 {
                 font->shapings.erase(font->shapings.begin() + i);
 
                 break;
+            }
+        }
+
+        ctx->complete(epoc::error_none);
+    }
+
+    struct font_table_offset_and_size {
+        std::uint32_t offset;
+        std::uint32_t size;
+    };
+
+    void fbscli::get_font_table(service::ipc_context *ctx) {
+        fbsfont *font = get_font_object(ctx);
+        std::optional<std::uint32_t> tag = ctx->get_argument_value<std::uint32_t>(1);
+        
+        if (!font || !tag.has_value()) {
+            ctx->complete(epoc::error_argument);
+            return;
+        }
+
+        font_table_offset_and_size offset_and_size;
+
+        // Search tag in existing map
+        auto result = font->font_tables.find(tag.value());
+        if (result != font->font_tables.end()) {
+            result->second.ref_count++;
+            offset_and_size.size = result->second.length;
+            offset_and_size.offset = result->second.offset;
+        } else {
+            // Call the adapter
+            if (!font->of_info.adapter->get_table_content(font->of_info.idx, tag.value(), nullptr, offset_and_size.size)) {
+                ctx->complete(epoc::error_not_found);
+                return;
+            }
+
+            void *result_data = server<fbs_server>()->allocate_general_data_impl(offset_and_size.size);
+            font->of_info.adapter->get_table_content(font->of_info.idx, tag.value(), reinterpret_cast<std::uint8_t*>(result_data),
+                offset_and_size.size);
+
+            fbsfont::tf_table_info table_info;
+            table_info.ref_count = 1;
+            table_info.offset = static_cast<std::uint32_t>(server<fbs_server>()->host_ptr_to_guest_shared_offset(result_data));
+            table_info.length = offset_and_size.size;
+            offset_and_size.offset = table_info.offset;
+
+            font->font_tables.emplace(tag.value(), std::move(table_info));
+        }
+
+        ctx->write_data_to_descriptor_argument<font_table_offset_and_size>(2, offset_and_size);
+        ctx->complete(epoc::error_none);
+    }
+
+    void fbscli::release_font_table(service::ipc_context *ctx) {
+        fbsfont *font = get_font_object(ctx);
+        std::optional<std::uint32_t> tag = ctx->get_argument_value<std::uint32_t>(1);
+        
+        if (!font || !tag.has_value()) {
+            ctx->complete(epoc::error_argument);
+            return;
+        }
+
+        // Search tag in existing map
+        auto result = font->font_tables.find(tag.value());
+        if (result != font->font_tables.end()) {
+            result->second.ref_count--;
+            if (result->second.ref_count <= 0) {
+                fbs_server *serv = server<fbs_server>();
+                if (!serv->free_general_data_impl(serv->get_shared_chunk_base() + result->second.offset)) {
+                    LOG_TRACE(SERVICE_FBS, "Unable to free font table data!");
+                }
+
+                font->font_tables.erase(result);
             }
         }
 

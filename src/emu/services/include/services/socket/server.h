@@ -61,6 +61,7 @@ namespace eka2l1 {
             void get_host_name(service::ipc_context *ctx);
             void set_host_name(service::ipc_context *ctx);
             void get_by_name(service::ipc_context *ctx);
+            void next(service::ipc_context *ctx);
             void close(service::ipc_context *ctx);
 
         public:
@@ -104,6 +105,7 @@ namespace eka2l1 {
     enum socket_opcode {
         socket_pr_find = 0x02,
         socket_so_create = 0x06,
+        socket_so_create_null = 0x07,
         socket_so_send = 0x08,
         socket_so_send_no_len = 0x09,
         socket_so_recv = 0x0A,
@@ -127,6 +129,8 @@ namespace eka2l1 {
         socket_cn_open_with_cn_type = 0x3F,
         socket_cn_get_long_des_setting = 0x51,
         socket_so_open_with_subconnection = 0x71,
+        socket_ss_request_optimal_dealer = 0x3EE,
+        socket_cm_api_ext_interface_send_receive = 0x3F0
     };
 
     enum socket_opcode_reform {
@@ -241,6 +245,7 @@ namespace eka2l1 {
         void hr_create(service::ipc_context *ctx, const bool with_conn);
         void so_create(service::ipc_context *ctx);
         void so_create_with_conn_or_subconn(service::ipc_context *ctx);
+        void so_create_null(service::ipc_context *ctx);
         void pr_find(service::ipc_context *ctx);
         void sr_get_by_number(eka2l1::service::ipc_context *ctx);
         void cn_open(eka2l1::service::ipc_context *ctx);

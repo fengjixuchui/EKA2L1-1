@@ -23,6 +23,7 @@
 #include <drivers/itc.h>
 
 #include <dispatch/libraries/gles1/shaderman.h>
+#include <services/window/classes/winuser.h>
 
 #include <common/vecx.h>
 #include <common/container.h>
@@ -61,6 +62,7 @@ namespace eka2l1::dispatch {
         EGL_MAJOR_VERSION_EMU = 1,
         EGL_MINOR_VERSION_EMU = 4,
         EGL_SUCCESS = 0x3000,
+        EGL_BAD_ALLOC_EMU = 0x3003,
         EGL_BAD_ATTRIBUTE_EMU = 0x3004,
         EGL_BAD_CONFIG = 0x3005,
         EGL_BAD_CONTEXT_EMU = 0x3006,
@@ -81,6 +83,8 @@ namespace eka2l1::dispatch {
         EGL_MAX_PBUFFER_WIDTH_EMU = 0x302C,
         EGL_SURFACE_TYPE_EMU = 0x3033,
         EGL_NONE_EMU = 0x3038,
+        EGL_BIND_TO_TEXTURE_RGB_EMU = 0x3039,
+        EGL_BIND_TO_TEXTURE_RGBA_EMU = 0x303A,
         EGL_RENDERABLE_TYPE_EMU = 0x3040,
         EGL_VENDOR_EMU = 0x3053,
         EGL_VERSION_EMU = 0x3054,
@@ -89,6 +93,10 @@ namespace eka2l1::dispatch {
         EGL_WIDTH_EMU = 0x3057,
         EGL_DRAW_EMU = 0x3059,
         EGL_READ_EMU = 0x305A,
+        EGL_CONTEXT_MAJOR_VERSION_KHR_EMU = 0x3098,
+        EGL_OPENGL_ES_API_EMU = 0x30A0,
+        EGL_OPENVG_API_EMU = 0x30A1,
+        EGL_OPENGL_API_EMU = 0x30A2,
         GL_NO_ERROR = 0,
         GL_ZERO_EMU = 0,
         GL_ONE_EMU = 1,
@@ -139,6 +147,8 @@ namespace eka2l1::dispatch {
         GL_ALPHA_TEST_REF_EMU = 0x0BC2,
         GL_RESCALE_NORMAL_EMU = 0x803A,
         GL_POLYGON_OFFSET_FILL_EMU = 0x8037,
+        GL_RGBA4_EMU = 0x8056,
+        GL_RGB5_A1_EMU = 0x8057,
         GL_MULTISAMPLE_EMU = 0x809D,
         GL_SAMPLE_ALPHA_TO_COVERAGE_EMU = 0x809E,
         GL_SAMPLE_ALPHA_TO_ONE_EMU = 0x809F,
@@ -164,6 +174,7 @@ namespace eka2l1::dispatch {
         GL_LINEAR_ATTENUATION_EMU = 0x1208,
         GL_QUADRATIC_ATTENUATION_EMU = 0x1209,
         GL_UNSIGNED_BYTE_EMU = 0x1401,
+        GL_INT_EMU = 0x1404,
         GL_INVERT_EMU = 0x150A,
         GL_EMISSION_EMU = 0x1600,
         GL_SHININESS_EMU = 0x1601,
@@ -211,6 +222,14 @@ namespace eka2l1::dispatch {
         GL_LIGHT5_EMU = 0x4005,
         GL_LIGHT6_EMU = 0x4006,
         GL_LIGHT7_EMU = 0x4007,
+        GL_CONSTANT_COLOR_EMU = 0x8001,
+        GL_ONE_MINUS_CONSTANT_COLOR_EMU = 0x8002,
+        GL_CONSTANT_ALPHA_EMU = 0x8003,
+        GL_ONE_MINUS_CONSTANT_ALPHA_EMU = 0x8004,
+        GL_BLEND_COLOR_EMU = 0x8005,
+        GL_FUNC_ADD_EMU = 0x8006,
+        GL_FUNC_SUBTRACT_EMU = 0x800A,
+        GL_FUNC_REVERSE_SUBTRACT_EMU = 0x800B,
         GL_UNSIGNED_SHORT_4_4_4_4_EMU = 0x8033,
         GL_UNSIGNED_SHORT_5_5_5_1_EMU = 0x8034,
         GL_UNSIGNED_SHORT_5_6_5_EMU = 0x8363,
@@ -225,6 +244,8 @@ namespace eka2l1::dispatch {
         GL_TEXTURE0_EMU = 0x84C0,
         GL_TEXTURE1_EMU = 0x84C1,
         GL_TEXTURE2_EMU = 0x84C2,
+        GL_MAX_VERTEX_ATTRIBS_EMU = 0x8869,
+        GL_MAX_TEXTURE_IMAGE_UNITS_EMU = 0x8872,
         GL_ARRAY_BUFFER_EMU = 0x8892,
         GL_ELEMENT_ARRAY_BUFFER_EMU = 0x8893,
         GL_STATIC_DRAW_EMU = 0x88E4,
@@ -232,8 +253,18 @@ namespace eka2l1::dispatch {
         GL_ACTIVE_TEXTURE_EMU = 0x84E0,
         GL_CLIENT_ACTIVE_TEXTURE_EMU = 0x84E1,
         GL_SUBTRACT_EMU = 0x84E7,
+        GL_DEPTH_STENCIL_OES_EMU = 0x84F9,
+        GL_UNSIGNED_INT_24_8_OES_EMU = 0x84FA,
         GL_TEXTURE_MAX_ANISOTROPHY_EMU = 0x84FE,
         GL_MAX_TEXTURE_MAX_ANISOTROPHY_EMU = 0x84FF,
+        GL_TEXTURE_CUBE_MAP_EMU = 0x8513,
+        GL_TEXTURE_BINDING_CUBE_MAP_EMU = 0x8514,
+        GL_TEXTURE_CUBE_MAP_POSITIVE_X_EMU = 0x8515,
+        GL_TEXTURE_CUBE_MAP_NEGATIVE_X_EMU = 0x8516,
+        GL_TEXTURE_CUBE_MAP_POSITIVE_Y_EMU = 0x8517,
+        GL_TEXTURE_CUBE_MAP_NEGATIVE_Y_EMU = 0x8518,
+        GL_TEXTURE_CUBE_MAP_POSITIVE_Z_EMU = 0x8519,
+        GL_TEXTURE_CUBE_MAP_NEGATIVE_Z_EMU = 0x851A,
         GL_COMBINE_EMU = 0x8570,
         GL_COMBINE_RGB_EMU = 0x8571,
         GL_COMBINE_ALPHA_EMU = 0x8572,
@@ -256,6 +287,8 @@ namespace eka2l1::dispatch {
         GL_SRC0_ALPHA_EMU = 0x8588,
         GL_SRC1_ALPHA_EMU = 0x8589,
         GL_SRC2_ALPHA_EMU = 0x858A,
+        GL_NUM_COMPRESSED_TEXTURE_FORMATS_EMU = 0x86A2,
+        GL_COMPRESSED_TEXTURE_FORMATS_EMU = 0x86A3,
         GL_DOT3_RGB_EMU = 0x86AE,
         GL_DOT3_RGBA_EMU = 0x86AF,
         GL_CLIP_PLANE0_EMU = 0x3000,
@@ -273,6 +306,7 @@ namespace eka2l1::dispatch {
         GL_GENERATE_MIPMAP_EMU = 0x8191,
         GL_REPEAT_EMU = 0x2901,
         GL_CLAMP_TO_EDGE_EMU = 0x812F,
+        GL_DEPTH_COMPONENT16_EMU = 0x81A5,
         GL_BYTE_EMU = 0x1400,
         GL_SHORT_EMU = 0x1402,
         GL_UNSIGNED_SHORT_EMU = 0x1403,
@@ -284,6 +318,7 @@ namespace eka2l1::dispatch {
         GL_MATRIX_INDEX_ARRAY_SIZE_OES = 0x8846,
         GL_MATRIX_INDEX_ARRAY_TYPE_OES = 0x8847,
         GL_MATRIX_INDEX_ARRAY_STRIDE_OES = 0x8848,
+        GL_DEPTH24_STENCIL8_OES = 0x88F0,
         GL_WEIGHT_ARRAY_TYPE_OES = 0x86A9,
         GL_WEIGHT_ARRAY_STRIDE_OES = 0x86AA,
         GL_WEIGHT_ARRAY_SIZE_OES = 0x86AB,
@@ -306,6 +341,7 @@ namespace eka2l1::dispatch {
         GL_MAX_TEXTURE_UNITS_EMU = 0x84E2,
         GL_BLEND_DST_EMU = 0x0BE0,
         GL_BLEND_SRC_EMU = 0x0BE1,
+        GL_TEXTURE_BINDING_2D_EMU = 0x8069,
         GL_VERTEX_ARRAY_SIZE_EMU = 0x807A,
         GL_VERTEX_ARRAY_TYPE_EMU = 0x807B,
         GL_VERTEX_ARRAY_STRIDE_EMU = 0x807C,
@@ -317,6 +353,7 @@ namespace eka2l1::dispatch {
         GL_TEXTURE_COORD_ARRAY_SIZE_EMU = 0x8088,
         GL_TEXTURE_COORD_ARRAY_TYPE_EMU = 0x8089,
         GL_TEXTURE_COORD_ARRAY_STRIDE_EMU = 0x808A,
+        GL_BGRA_EXT_EMU = 0x80E1,
         GL_COLOR_CLEAR_VALUE_EMU = 0x0C22,
         GL_COLOR_WRITEMASK_EMU = 0x0C23,
         GL_SMOOTH_LINE_WIDTH_RANGE_EMU = 0x0B22,
@@ -338,6 +375,38 @@ namespace eka2l1::dispatch {
         GL_RENDERER = 0x1F01,
         GL_VERSION = 0x1F02,
         GL_EXTENSIONS = 0x1F03,
+        GL_FRAGMENT_SHADER_EMU = 0x8B30,
+        GL_VERTEX_SHADER_EMU = 0x8B31,
+        GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS_EMU = 0x8B4C,
+        GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS_EMU = 0x8B4D,
+        GL_SHADER_TYPE_EMU = 0x8B4F,
+        GL_FLOAT_VEC2_EMU = 0x8B50,
+        GL_FLOAT_VEC3_EMU = 0x8B51,
+        GL_FLOAT_VEC4_EMU = 0x8B52,
+        GL_INT_VEC2_EMU = 0x8B53,
+        GL_INT_VEC3_EMU = 0x8B54,
+        GL_INT_VEC4_EMU = 0x8B55,
+        GL_BOOL_EMU = 0x8B56,
+        GL_BOOL_VEC2_EMU = 0x8B57,
+        GL_BOOL_VEC3_EMU = 0x8B58,
+        GL_BOOL_VEC4_EMU = 0x8B59,
+        GL_FLOAT_MAT2_EMU = 0x8B5A,
+        GL_FLOAT_MAT3_EMU = 0x8B5B,
+        GL_FLOAT_MAT4_EMU = 0x8B5C,
+        GL_SAMPLER_2D_EMU = 0x8B5E,
+        GL_SAMPLER_CUBE_EMU = 0x8B60,
+        GL_DELETE_STATUS_EMU = 0x8B80,
+        GL_COMPILE_STATUS_EMU = 0x8B81,
+        GL_LINK_STATUS_EMU = 0x8B82,
+        GL_VALIDATE_STATUS_EMU = 0x8B83,
+        GL_INFO_LOG_LENGTH_EMU = 0x8B84,
+        GL_ATTACHED_SHADERS_EMU = 0x8B85,
+        GL_ACTIVE_UNIFORMS_EMU = 0x8B86,
+        GL_ACTIVE_UNIFORM_MAX_LENGTH_EMU = 0x8B87,
+        GL_ACTIVE_ATTRIBUTES_EMU = 0x8B89,
+        GL_ACTIVE_ATTRIBUTE_MAX_LENGTH_EMU = 0x8B8A,
+        GL_SHADING_LANGUAGE_VERSION_EMU = 0x8B8C,
+        GL_SHADER_SOURCE_LENGTH_EMU = 0x8B88,
         GL_PALETTE4_RGB8_OES_EMU = 0x8B90,
         GL_PALETTE4_RGBA8_OES_EMU = 0x8B91,
         GL_PALETTE4_R5_G6_B5_OES_EMU = 0x8B92,
@@ -348,11 +417,28 @@ namespace eka2l1::dispatch {
         GL_PALETTE8_R5_G6_B5_OES_EMU = 0x8B97,
         GL_PALETTE8_RGBA4_OES_EMU = 0x8B98,
         GL_PALETTE8_RGB5_A1_OES_EMU = 0x8B99,
+        GL_IMPLEMENTATION_COLOR_READ_TYPE_EMU = 0x8B9A,
+        GL_IMPLEMENTATION_COLOR_READ_FORMAT_EMU = 0x8B9B,
         GL_COMPRESSED_RGB_PVRTC_4BPPV1_EMU = 0x8C00,
         GL_COMPRESSED_RGB_PVRTC_2BPPV1_EMU = 0x8C01,
         GL_COMPRESSED_RGBA_PVRTC_4BPPV1_EMU = 0x8C02,
         GL_COMPRESSED_RGBA_PVRTC_2BPPV1_EMU = 0x8C03,
+        GL_FRAMEBUFFER_BINDING_EMU = 0x8CA6,
+        GL_RENDERBUFFER_BINDING_EMU = 0x8CA7,
+        GL_FRAMEBUFFER_COMPLETE_EMU = 0x8CD5,
+        GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_EMU = 0x8CD6,
+        GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT_EMU = 0x8CD7,
+        GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS_EMU = 0x8CD9,
+        GL_FRAMEBUFFER_UNSUPPORTED_EMU = 0x8CDD,
+        GL_COLOR_ATTACHMENT0_EMU = 0x8CE0,
+        GL_DEPTH_ATTACHMENT_EMU = 0x8D00,
+        GL_STENCIL_ATTACHMENT_EMU = 0x8D20,
+        GL_FRAMEBUFFER_EMU = 0x8D40,
+        GL_RENDERBUFFER_EMU = 0x8D41,
+        GL_STENCIL_INDEX8_EMU = 0x8D48,
+        GL_RGB565_EMU = 0x8D62,
         GL_ETC1_RGB8_OES_EMU = 0x8D64,
+        GL_NUM_SHADER_BINARY_FORMATS_EMU = 0x8DF9,
         GL_UNPACK_ALIGNMENT_EMU = 0x0CF5,
         GL_PACK_ALIGNMENT_EMU = 0x0D05,
         GL_SUBPIXEL_BITS_EMU = 0x0D50,
@@ -369,7 +455,7 @@ namespace eka2l1::dispatch {
 
     static constexpr const char *EGL_STATIC_STRING_VENDOR = "EKA2L1";
     static constexpr const char *EGL_STATIC_STRING_VERSION = "1.4";
-    static constexpr const char *EGL_STATIC_STRING_EXTENSION = "";
+    static constexpr const char *EGL_STATIC_STRING_EXTENSION = "EGL_KHR_create_context";
     static constexpr std::uint32_t MAX_EGL_FB_WIDTH = 2048;
     static constexpr std::uint32_t MAX_EGL_FB_HEIGHT = 2048;
 
@@ -419,7 +505,7 @@ namespace eka2l1::dispatch {
 
     struct egl_context;
 
-    struct egl_surface {
+    struct egl_surface : public epoc::canvas_observer {
         drivers::handle handle_;
         egl_config config_;
 
@@ -435,6 +521,11 @@ namespace eka2l1::dispatch {
 
         explicit egl_surface(epoc::canvas_base *backed_window, epoc::screen *screen, eka2l1::vec2 dim,
             drivers::handle h, egl_config config);
+        ~egl_surface();
+
+        void scale_and_bind(egl_context *context, drivers::graphics_driver *drv);
+        void scale(egl_context *context, drivers::graphics_driver *drv);
+        void on_window_size_changed(epoc::canvas_interface *obj) override;
     };
 
     struct egl_context {

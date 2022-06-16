@@ -74,6 +74,8 @@ namespace eka2l1 {
         service::property *network_bars_prop_;
         service::property *battery_bars_prop_;
         service::property *charger_status_prop_;
+        service::property *call_type_info_prop_;
+        service::property *sim_c_status_prop_;
 
         bool init2ed_;
 

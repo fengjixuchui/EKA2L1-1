@@ -30,13 +30,29 @@
 namespace eka2l1::drivers {
     class graphics_driver;
 
-    enum class shader_set_var_type {
+    enum class shader_var_type {
+        none,
         integer,
         real,
+        boolean,
+        vec2,
         vec3,
         vec4,
+        ivec2,
+        ivec3,
+        ivec4,
+        bvec2,
+        bvec3,
+        bvec4,
+        sampler1d,
+        sampler2d,
+        sampler_cube,
+        mat2,
+        mat3,
         mat4
     };
+
+    static constexpr std::uint32_t TOTAL_BITS_PER_SHADER_VAR_TYPE = 5;
 
     struct shader_program_metadata {
         const std::uint8_t *metadata_;
@@ -52,6 +68,15 @@ namespace eka2l1::drivers {
         const std::uint16_t get_attribute_count() const;
         const std::uint16_t get_uniform_count() const;
 
+        const std::uint16_t get_attribute_max_name_length() const;
+        const std::uint16_t get_uniform_max_name_length() const;
+
+        bool get_uniform_info(const char *name, std::int32_t &binding, shader_var_type &var_type, std::int32_t &array_size) const;
+        bool get_attribute_info(const char *name, std::int32_t &binding, shader_var_type &var_type, std::int32_t &array_size) const;
+
+        bool get_uniform_info(const int index, std::string &name, std::int32_t &binding, shader_var_type &var_type, std::int32_t &array_size) const;
+        bool get_attribute_info(const int index, std::string &name, std::int32_t &binding, shader_var_type &var_type, std::int32_t &array_size) const;
+
         const std::int32_t get_uniform_binding(const char *name) const;
         const std::int32_t get_attribute_binding(const char *name) const;
     };
@@ -61,7 +86,8 @@ namespace eka2l1::drivers {
         virtual ~shader_module() {
         }
 
-        virtual bool create(graphics_driver *driver, const char *data, const std::size_t size, const shader_module_type type) = 0;
+        virtual bool create(graphics_driver *driver, const char *data, const std::size_t size, const shader_module_type type,
+            std::string *compile_log = nullptr) = 0;
     };
 
     using shader_module_instance = std::shared_ptr<shader_module>;
@@ -72,7 +98,7 @@ namespace eka2l1::drivers {
             
         }
 
-        virtual bool create(graphics_driver *driver, shader_module *vertex_module, shader_module *fragment_module) = 0;
+        virtual bool create(graphics_driver *driver, shader_module *vertex_module, shader_module *fragment_module, std::string *link_log = nullptr) = 0;
         virtual bool use(graphics_driver *driver) = 0;
 
         virtual std::optional<int> get_uniform_location(const std::string &name) = 0;

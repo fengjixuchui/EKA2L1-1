@@ -348,6 +348,21 @@ namespace eka2l1 {
         ctx.complete(epoc::error_none);
     }
 
+    void loader_server::load_logical_device(service::ipc_context &context) {
+        std::optional<utf16_str> ldd_name = context.get_argument_value<utf16_str>(1);
+        if (!ldd_name.has_value()) {
+            context.complete(epoc::error_argument);
+            return;
+        }
+
+        LOG_TRACE(SERVICE_LOADER, "Trying to load LDD {}", common::ucs2_to_utf8(ldd_name.value()));
+        context.complete(epoc::error_none);
+    }
+
+    void loader_server::load_locale(service::ipc_context &context) {
+        context.complete(epoc::error_not_found);
+    }
+
     loader_server::loader_server(system *sys)
         : service::server(sys->get_kernel_system(), sys, nullptr, get_loader_server_name_through_epocver(sys->get_symbian_version_use()), true) {
         REGISTER_IPC(loader_server, load_process, ELoadProcess, "Loader::LoadProcess");
@@ -356,5 +371,7 @@ namespace eka2l1 {
         REGISTER_IPC(loader_server, get_info_from_header, EGetInfoFromHeader, "Loader::GetInfoFromHeader");
         REGISTER_IPC(loader_server, delete_loader, ELdrDelete, "Loader::Delete");
         REGISTER_IPC(loader_server, check_library_hash, ECheckLibraryHash, "Loader::CheckLibraryHash");
+        REGISTER_IPC(loader_server, load_locale, ELoadLocale, "Loader::LoadLocale");
+        REGISTER_IPC(loader_server, load_logical_device, ELoadLogicalDevice, "Loader::LoadLogicalDevice");
     }
 }

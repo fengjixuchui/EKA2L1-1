@@ -87,7 +87,12 @@ namespace eka2l1::scripting {
     }
 
     std::uint32_t codeseg::get_export(process *pr, const std::uint32_t index) {
-        std::vector<std::uint32_t> table = real_seg_->get_export_table(pr ? pr->get_process_handle() : nullptr);
+        std::vector<std::uint32_t> table;
+        if (pr) {
+            table = real_seg_->get_export_table(pr->get_process_handle());
+        } else {
+            table = real_seg_->get_export_table_raw();
+        }
         if (table.size() < index) {
             return 0xFFFFFFFF;
         }
@@ -172,5 +177,9 @@ EKA2L1_EXPORT std::uint32_t eka2l1_codeseg_get_export(eka2l1::scripting::codeseg
 
 EKA2L1_EXPORT std::uint32_t eka2l1_codeseg_get_entry_point(eka2l1::scripting::codeseg *seg, eka2l1::scripting::process  *pr) {
     return seg->get_entry_point(pr);
+}
+
+EKA2L1_EXPORT std::uint32_t eka2l1_codeseg_get_hash(eka2l1::scripting::codeseg *seg) {
+    return seg->real_seg_->get_hash();
 }
 }

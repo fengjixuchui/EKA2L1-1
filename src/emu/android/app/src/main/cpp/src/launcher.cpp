@@ -62,15 +62,22 @@ namespace eka2l1::android {
         }
     }
 
+    static constexpr std::uint32_t WARE_APP_UID_START = 0x10300000;
+    static inline bool is_reg_entry_probably_system_app(const apa_app_registry &reg) {
+        return ((reg.land_drive == drive_z) && (reg.mandatory_info.uid < WARE_APP_UID_START));
+    }
+
     std::vector<std::string> launcher::get_apps() {
         std::vector<apa_app_registry> &registerations = alserv->get_registerations();
         std::vector<std::string> info;
         for (auto &reg : registerations) {
             if (!reg.caps.is_hidden) {
-                std::string name = common::ucs2_to_utf8(reg.mandatory_info.long_caption.to_std_string(nullptr));
-                std::string uid = std::to_string(reg.mandatory_info.uid);
-                info.push_back(uid);
-                info.push_back(name);
+                if (!conf || (conf && (!conf->hide_system_apps || (conf->hide_system_apps && !is_reg_entry_probably_system_app(reg))))) {
+                    std::string name = common::ucs2_to_utf8(reg.mandatory_info.long_caption.to_std_string(nullptr));
+                    std::string uid = std::to_string(reg.mandatory_info.uid);
+                    info.push_back(uid);
+                    info.push_back(name);
+                }
             }
         }
         return info;
@@ -355,6 +362,10 @@ namespace eka2l1::android {
         }
     }
 
+    void launcher::rescan_devices() {
+        sys->rescan_devices(drive_z);
+    }
+
     std::uint32_t launcher::get_current_device() {
         return conf->device;
     }
@@ -454,26 +465,6 @@ namespace eka2l1::android {
 
     void launcher::update_app_setting(std::uint32_t uid) {
         kern->get_app_settings()->update_setting(uid);
-    }
-
-    static void advance_dsa_pos_around_origin(eka2l1::rect &origin_normal_rect, const int rotation) {
-        switch (rotation) {
-        case 90:
-            origin_normal_rect.top.x += origin_normal_rect.size.x;
-            break;
-
-        case 180:
-            origin_normal_rect.top.x += origin_normal_rect.size.x;
-            origin_normal_rect.top.y += origin_normal_rect.size.y;
-            break;
-
-        case 270:
-            origin_normal_rect.top.y += origin_normal_rect.size.y;
-            break;
-
-        default:
-            break;
-        }
     }
 
     void launcher::draw(drivers::graphics_command_builder &builder, epoc::screen *scr,
@@ -576,7 +567,7 @@ namespace eka2l1::android {
             dest.top = eka2l1::vec2(x, y);
             dest.size = eka2l1::vec2(width, height);
 
-            advance_dsa_pos_around_origin(dest, scr->ui_rotation);
+            drivers::advance_draw_pos_around_origin(dest, scr->ui_rotation);
 
             if (scr->ui_rotation % 180 != 0) {
                 std::swap(dest.size.x, dest.size.y);

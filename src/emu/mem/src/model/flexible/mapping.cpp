@@ -112,7 +112,9 @@ namespace eka2l1::mem::flexible {
                 // Ask the MMU to create a new page table and assign it
                 tbl = control->create_new_page_table();
                 tbl->idx_ = ptoff;
+
                 owner_->dir_->set_page_table(ptoff, tbl);
+                owner_->used_tables_.push_back(tbl);
             }
 
             while (start_page_index < end_page_index) {
@@ -151,8 +153,8 @@ namespace eka2l1::mem::flexible {
             std::uint32_t next_end_addr = ((ptoff + 1) << control->chunk_shift_);
             next_end_addr = std::min<std::uint32_t>(next_end_addr, end_addr);
 
-            std::uint32_t start_page_index = (start_addr >> control->page_index_shift_) & control->page_index_mask_;
-            const std::uint32_t end_page_index = (next_end_addr >> control->page_index_shift_) & control->page_index_mask_;
+            std::uint32_t start_page_index = (start_addr >> control->page_index_shift_);
+            const std::uint32_t end_page_index = (next_end_addr >> control->page_index_shift_);
 
             // Try to get the page table from daddy
             page_table *tbl = owner_->dir_->get_page_table(start_addr);
@@ -160,7 +162,7 @@ namespace eka2l1::mem::flexible {
             if (tbl) {
                 // Proceed with the unmapping
                 while (start_page_index < end_page_index) {
-                    page_info *info = tbl->get_page_info(start_page_index);
+                    page_info *info = tbl->get_page_info(start_page_index & control->page_index_mask_);
                     if (info) {
                         // Empty it out
                         info->host_addr = nullptr;

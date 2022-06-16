@@ -19,6 +19,7 @@
 
 #include <dispatch/libraries/egl/egl.h>
 #include <dispatch/libraries/gles1/def.h>
+#include <dispatch/libraries/gles2/def.h>
 #include <dispatch/dispatcher.h>
 #include <kernel/kernel.h>
 
@@ -36,12 +37,12 @@
 namespace eka2l1::dispatch {
     // First bit is surface type, and second bit is buffer size bits
     static constexpr std::uint32_t EGL_EMU_CONFIG_LIST_VALS[] = {
-        // GLES1
-        0b010, 0b100, 0b110,
-        0b011, 0b101, 0b111,
         // GLES2
         0b1010, 0b1100, 0b1110,
         0b1011, 0b1101, 0b1111,
+        // GLES1
+        0b010, 0b100, 0b110,
+        0b011, 0b101, 0b111,
     };
 
     static constexpr std::uint32_t EGL_EMU_CONFIG_LIST_VALS_LENGTH = sizeof(EGL_EMU_CONFIG_LIST_VALS) / sizeof(std::uint32_t);
@@ -123,10 +124,11 @@ namespace eka2l1::dispatch {
         std::int32_t surface_type = -1;
         std::uint32_t total_color_bits_calculated = -1;
         std::uint32_t total_color_bits_provided = -1;
+        std::uint32_t gles_context_type = EGL_OPENGL_ES1_BIT;
 
         while (attrib_lists != nullptr) {
             std::uint32_t pname = *attrib_lists++;
-            if (pname == 0) {
+            if ((pname == 0) || (pname == EGL_NONE_EMU)) {
                 break;
             }
             std::uint32_t param = *attrib_lists++;
@@ -150,6 +152,10 @@ namespace eka2l1::dispatch {
                 total_color_bits_provided = param;
                 break;
 
+            case EGL_RENDERABLE_TYPE_EMU:
+                gles_context_type = param;
+                break;
+
             default:
                 break;
             }
@@ -165,16 +171,11 @@ namespace eka2l1::dispatch {
         if (surface_type == -1) {
             type = egl_config::EGL_SURFACE_TYPE_WINDOW;
         } else {
-            switch (surface_type) {
-            case EGL_PBUFFER_BIT_EMU:
+            if (surface_type & EGL_PBUFFER_BIT_EMU) {
                 type = egl_config::EGL_SURFACE_TYPE_PBUFFER;
-                break;
-
-            case EGL_WINDOW_BIT_EMU:
+            } else if (surface_type & EGL_WINDOW_BIT_EMU) {
                 type = egl_config::EGL_SURFACE_TYPE_WINDOW;
-                break;
-
-            default:
+            } else {
                 // This is not a fail. We don't support it now.
                 *num_config_choosen = 0;
                 return EGL_TRUE;
@@ -186,9 +187,18 @@ namespace eka2l1::dispatch {
         for (std::int32_t i = 0; i < EGL_EMU_CONFIG_LIST_VALS_LENGTH; i++) {
             egl_config config_parser(EGL_EMU_CONFIG_LIST_VALS[i]);
             if (config_parser.get_surface_type() == type) {
-                if ((total_color_bits_provided == -1) || (config_parser.buffer_size() >= total_color_bits_provided)) {
-                    if (current_fill_index < config_array_size) {
-                        configs[current_fill_index++] = config_parser;
+                egl_config::target_context_version ver = config_parser.get_target_context_version();
+                std::uint32_t egl_version_enum = EGL_OPENGL_ES1_BIT;
+
+                if (ver == egl_config::EGL_TARGET_CONTEXT_ES2) {
+                    egl_version_enum = EGL_OPENGL_ES2_BIT;
+                }
+
+                if (gles_context_type & egl_version_enum) {
+                    if ((total_color_bits_provided == -1) || (config_parser.buffer_size() >= total_color_bits_provided)) {
+                        if (current_fill_index < config_array_size) {
+                            configs[current_fill_index++] = config_parser;
+                        }
                     }
                 }
             }
@@ -213,6 +223,11 @@ namespace eka2l1::dispatch {
 
         if (choosen_config.buffer_size() > 32) {
             egl_push_error(sys, EGL_BAD_CONFIG);
+            return EGL_NO_SURFACE_EMU;
+        }
+        
+        if (!win) {
+            egl_push_error(sys, EGL_BAD_NATIVE_WINDOW_EMU);
             return EGL_NO_SURFACE_EMU;
         }
 
@@ -240,13 +255,14 @@ namespace eka2l1::dispatch {
             return EGL_NO_SURFACE_EMU;
         }
 
-        drivers::handle hh = drivers::create_bitmap(driver, canvas->size() * canvas->scr->display_scale_factor, choosen_config.buffer_size());
+        drivers::handle hh = drivers::create_bitmap(driver, canvas->size_for_egl_surface() * canvas->scr->display_scale_factor, choosen_config.buffer_size());
         if (hh == 0) {
             egl_push_error(sys, EGL_BAD_CONFIG);
             return EGL_NO_SURFACE_EMU;
         }
 
-        std::unique_ptr<egl_surface> result_surface = std::make_unique<egl_surface>(canvas, canvas->scr, canvas->size(), hh, choosen_config);
+        // NOTE: Symbian does not seems to check for surface created previously for this window (to throw EGL_BAD_ALLOC)
+        std::unique_ptr<egl_surface> result_surface = std::make_unique<egl_surface>(canvas, canvas->scr, canvas->size_for_egl_surface(), hh, choosen_config);
         egl_surface_handle result_handle = controller.add_managed_surface(result_surface);
 
         if (result_handle == EGL_NO_SURFACE_EMU) {
@@ -344,9 +360,31 @@ namespace eka2l1::dispatch {
         egl_config choosen_config(choosen_config_value);
         egl_context_instance context_inst = nullptr;
 
-        switch (choosen_config.get_target_context_version()) {
+        egl_config::target_context_version version = choosen_config.get_target_context_version();
+
+        while (additional_attribs_ != nullptr) {
+            std::uint32_t pname = *(additional_attribs_++);
+            if ((pname == 0) || (pname == EGL_NONE_EMU)) {
+                break;
+            }
+            std::uint32_t param = *(additional_attribs_++);
+
+            if (pname == EGL_CONTEXT_MAJOR_VERSION_KHR_EMU) {
+                if (param == 2) {
+                    version = egl_config::EGL_TARGET_CONTEXT_ES2;
+                } else {
+                    version = egl_config::EGL_TARGET_CONTEXT_ES11;
+                }
+            }
+        }
+
+        switch (version) {
         case egl_config::EGL_TARGET_CONTEXT_ES11:
             context_inst = std::make_unique<egl_context_es1>();
+            break;
+
+        case egl_config::EGL_TARGET_CONTEXT_ES2:
+            context_inst = std::make_unique<egl_context_es2>();
             break;
 
         default:
@@ -455,21 +493,7 @@ namespace eka2l1::dispatch {
 
         if (surface->backed_window_) {
             egl_context *ctx = surface->bounded_context_;
-            if (surface->current_scale_ != surface->backed_screen_->display_scale_factor) {
-                // Silently resize and scale
-                float new_display_factor = surface->backed_screen_->display_scale_factor;
-                eka2l1::vec2 new_scaled_size = surface->dimension_ * new_display_factor;
-
-                drivers::handle new_surface = drivers::create_bitmap(drv, new_scaled_size, 32);
-
-                ctx->cmd_builder_.bind_bitmap(new_surface);
-                ctx->cmd_builder_.draw_bitmap(surface->handle_, 0, eka2l1::rect(eka2l1::vec2(0, 0), new_scaled_size),
-                    eka2l1::rect(eka2l1::vec2(0, 0), eka2l1::vec2(0, 0)));
-                ctx->cmd_builder_.destroy_bitmap(surface->handle_);
-
-                surface->handle_ = new_surface;
-                surface->current_scale_ = surface->backed_screen_->display_scale_factor;
-            }
+            surface->scale(ctx, drv);
 
             if (ctx && surface->backed_window_->can_be_physically_seen()) {
                 drivers::graphics_command_builder &window_builder = surface->backed_window_->driver_builder_;
@@ -479,8 +503,20 @@ namespace eka2l1::dispatch {
                 eka2l1::rect dest_rect = surface->backed_window_->abs_rect;
                 dest_rect.scale(surface->backed_screen_->display_scale_factor);
 
+                int rotation = 0;
+
+                if (surface->backed_window_->flags & epoc::window::flag_fix_native_orientation) {
+                    // Surface is also upside down. So a 180 flip :(
+                    rotation = (surface->backed_screen_->current_mode().rotation + 180) % 360;
+                    eka2l1::drivers::advance_draw_pos_around_origin(dest_rect, rotation);
+
+                    if (rotation % 180 != 0) {
+                        std::swap(dest_rect.size.x, dest_rect.size.y);
+                    }
+                }
+
                 window_builder.draw_bitmap(surface->handle_, 0, dest_rect, eka2l1::rect(eka2l1::vec2(0, 0), eka2l1::vec2(0, 0)),
-                    eka2l1::vec2(0, 0), 0.0f, drivers::bitmap_draw_flag_flip);
+                    eka2l1::vec2(0, 0), static_cast<float>(rotation), drivers::bitmap_draw_flag_flip);
 
                 surface->backed_window_->content_changed(true);
             }
@@ -625,6 +661,11 @@ namespace eka2l1::dispatch {
 
         case EGL_MAX_PBUFFER_HEIGHT_EMU:
             *value = MAX_EGL_FB_HEIGHT;
+            break;
+
+        case EGL_BIND_TO_TEXTURE_RGB_EMU:
+        case EGL_BIND_TO_TEXTURE_RGBA_EMU:
+            *value = EGL_TRUE;
             break;
 
         default:
@@ -792,5 +833,25 @@ namespace eka2l1::dispatch {
         }
 
         return sys->get_dispatcher()->lookup_dispatcher_function_by_symbol(procname);
+    }
+
+    BRIDGE_FUNC_LIBRARY(egl_boolean, egl_bind_api_emu, const std::uint32_t bind_api) {
+        switch (bind_api) {
+        case EGL_OPENGL_API_EMU:
+            LOG_ERROR(HLE_DISPATCHER, "OpenGL API is not supported in the emulator");
+            break;
+
+        case EGL_OPENVG_API_EMU:
+            LOG_INFO(HLE_DISPATCHER, "Trying to bind OpenVG API!");
+            break;
+
+        case EGL_OPENGL_ES_API_EMU:
+            LOG_INFO(HLE_DISPATCHER, "Trying to bind OpenGL ES API!");
+            break;
+
+        default:
+            break;
+        }
+        return EGL_TRUE;
     }
 }

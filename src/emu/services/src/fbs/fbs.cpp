@@ -273,6 +273,18 @@ namespace eka2l1 {
             delete_font_shaping(ctx);
             break;
 
+        case fbs_get_font_table:
+            get_font_table(ctx);
+            break;
+
+        case fbs_release_font_table:
+            release_font_table(ctx);
+            break;
+
+        case fbs_fetch_linked_typeface:
+            ctx->complete(epoc::error_not_supported);
+            break;
+
         default: {
             LOG_ERROR(SERVICE_FBS, "Unhandled FBScli opcode 0x{:X}", ctx->msg->function);
             break;
@@ -338,7 +350,7 @@ namespace eka2l1 {
                               "FbsLargeChunk",
                               0,
                               0,
-                              0x2000000,
+                              (kern->get_epoc_version() >= epocver::epoc95) ? 0x08000000 : 0x06000000,
                               prot_read_write,
                               kernel::chunk_type::normal,
                               kernel::chunk_access::global,
@@ -355,7 +367,7 @@ namespace eka2l1 {
                 "FbsLargeBitmapAccess", kernel::access_type::global_access));
         } else {
             large_bitmap_access_mutex = kern->create<kernel::mutex>(kern->get_ntimer(),
-                "FbsLargeBitmapAccess", false, kernel::access_type::global_access);
+                nullptr, "FbsLargeBitmapAccess", false, kernel::access_type::global_access);
         }
 
         if (!large_bitmap_access_mutex) {

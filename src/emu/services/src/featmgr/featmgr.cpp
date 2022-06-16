@@ -37,18 +37,29 @@ namespace eka2l1 {
     enum feature_id : epoc::uid {
         feature_id_opengl_es_3d_api = 10,
         feature_id_svgt = 77,
+        feature_id_side_volume_key = 207,
+        feature_id_pen = 410,
+        feature_id_vibra = 411,
         feature_id_korean = 180,
         feature_id_japanese = 1080,
         feature_id_thai = 1081,
         feature_id_chinese = 1096,
+        feature_id_flash_lite_viewer = 1145,
+        feature_id_pen_calibration = 1658,
+        feature_id_tactile_feedback = 1718
     };
 
     void featmgr_server::do_feature_scanning(system *sys) {
         // TODO: There is a lot of features.
         // See in here: https://github.com/SymbianSource/oss.FCL.sf.os.deviceplatformrelease/blob/master/foundation_system/sf_config/config/inc/publicruntimeids.hrh
 
-        // 1. We always welcome rendering with OpenGL ES
+        // 1. We always welcome rendering with OpenGL ES and Flash
         enable_features.push_back(feature_id_opengl_es_3d_api);
+        enable_features.push_back(feature_id_flash_lite_viewer);
+        enable_features.push_back(feature_id_side_volume_key);
+        enable_features.push_back(feature_id_pen);
+        enable_features.push_back(feature_id_vibra);
+        enable_features.push_back(feature_id_pen_calibration);
 
         // 2. Are we welcoming SVG? Check for OpenVG, cause it should be there if this feature is available
         if (sys->get_io_system()->exist(u"z:\\sys\\bin\\libopenvg.dll")) {
@@ -139,9 +150,22 @@ namespace eka2l1 {
             config_loaded = true;
         }
 
+        epoc::uid feature_id = 0;
+
         // NOTE: Newer version of this server use TFeatureEntry struct. Care about this note when this server
         // mess things up.
-        const epoc::uid feature_id = *ctx.get_argument_value<epoc::uid>(0);
+        if (ctx.sys->get_symbian_version_use() >= epocver::epoc95) {
+            std::optional<feature_entry> entry = ctx.get_argument_data_from_descriptor<feature_entry>(0);
+            if (!entry.has_value()) {
+                ctx.complete(epoc::error_argument);
+                return;
+            }
+
+            feature_id = entry->feature_id_;
+        } else {
+            feature_id = *ctx.get_argument_value<epoc::uid>(0);
+        }
+
         int result = 0;
 
         // Search for the feature, first in feature list

@@ -72,7 +72,7 @@ namespace eka2l1::drivers {
         return handle_num;
     }
     
-    drivers::handle create_shader_module(graphics_driver *driver, const char *data, const std::size_t size, const shader_module_type mtype) {
+    drivers::handle create_shader_module(graphics_driver *driver, const char *data, const std::size_t size, const shader_module_type mtype, std::string *compile_log) {
         drivers::handle handle_num = 0;
 
         command cmd;
@@ -81,6 +81,7 @@ namespace eka2l1::drivers {
         cmd.data_[1] = size;
         cmd.data_[2] = static_cast<std::uint64_t>(mtype);
         cmd.data_[3] = reinterpret_cast<std::uint64_t>(&handle_num);
+        cmd.data_[4] = reinterpret_cast<std::uint64_t>(compile_log);
 
         if (send_sync_command(driver, cmd) != 0) {
             return 0;
@@ -89,7 +90,7 @@ namespace eka2l1::drivers {
         return handle_num;
     }
 
-    drivers::handle create_shader_program(graphics_driver *driver, drivers::handle vert_mod, drivers::handle frag_mod, shader_program_metadata *metadata) {
+    drivers::handle create_shader_program(graphics_driver *driver, drivers::handle vert_mod, drivers::handle frag_mod, shader_program_metadata *metadata, std::string *link_log) {
         drivers::handle handle_num = 0;
         std::uint8_t *metadata_ptr = nullptr;
 
@@ -99,6 +100,7 @@ namespace eka2l1::drivers {
         cmd.data_[1] = frag_mod;
         cmd.data_[2] = reinterpret_cast<std::uint64_t>(&metadata_ptr);
         cmd.data_[3] = reinterpret_cast<std::uint64_t>(&handle_num);
+        cmd.data_[4] = reinterpret_cast<std::uint64_t>(link_log);
 
         if (send_sync_command(driver, cmd) != 0) {
             return 0;
@@ -172,6 +174,45 @@ namespace eka2l1::drivers {
         return handle_num;
     }
     
+    drivers::handle create_renderbuffer(graphics_driver *driver, const eka2l1::vec2 &size, const drivers::texture_format internal_format) {
+        drivers::handle handle_num = 0;
+        command cmd;
+
+        cmd.opcode_ = graphics_driver_create_renderbuffer;
+        cmd.data_[0] = PACK_2U32_TO_U64(size.x, size.y);
+        cmd.data_[1] = static_cast<std::uint64_t>(internal_format);
+        cmd.data_[2] = 0;
+        cmd.data_[3] = reinterpret_cast<std::uint64_t>(&handle_num);
+
+        if (send_sync_command(driver, cmd) != 0) {
+            return 0;
+        }
+
+        return handle_num;
+    }
+    
+    drivers::handle create_framebuffer(graphics_driver *driver, const drivers::handle *color_buffers, const int *color_face_indicies,
+        const std::uint32_t color_buffer_count, drivers::handle depth_buffer, const int depth_face_index,
+        drivers::handle stencil_buffer, const int stencil_face_index) {
+        drivers::handle handle_num = 0;
+        command cmd;
+
+        cmd.opcode_ = graphcis_driver_create_framebuffer;
+        cmd.data_[0] = reinterpret_cast<std::uint64_t>(color_buffers);
+        cmd.data_[1] = reinterpret_cast<std::uint64_t>(color_face_indicies);
+        cmd.data_[2] = static_cast<std::uint64_t>(color_buffer_count);
+        cmd.data_[3] = depth_buffer;
+        cmd.data_[4] = stencil_buffer;
+        cmd.data_[5] = PACK_2U32_TO_U64(depth_face_index, stencil_face_index);
+        cmd.data_[6] = reinterpret_cast<std::uint64_t>(&handle_num);
+
+        if (send_sync_command(driver, cmd) != 0) {
+            return 0;
+        }
+
+        return handle_num;
+    }
+    
     bool read_bitmap(graphics_driver *driver, drivers::handle h, const eka2l1::point &pos, const eka2l1::object_size &size,
         const std::uint32_t bpp, std::uint8_t *buffer_ptr) {
         command cmd;
@@ -184,6 +225,19 @@ namespace eka2l1::drivers {
         cmd.data_[4] = reinterpret_cast<std::uint64_t>(buffer_ptr);
 
         return send_sync_command(driver, cmd);
+    }
+    
+    void read_framebuffer(graphics_driver *driver, drivers::handle h, const eka2l1::vec2 pos, const eka2l1::vec2 size, drivers::texture_format format, drivers::texture_data_type dt, void *data_ptr) {
+        command cmd;
+
+        cmd.opcode_ = graphics_driver_read_framebuffer;
+        cmd.data_[0] = h;
+        cmd.data_[1] = static_cast<std::uint64_t>(static_cast<std::uint32_t>(format) | (static_cast<std::uint64_t>(dt) << 32));
+        cmd.data_[2] = PACK_2U32_TO_U64(pos.x, pos.y);
+        cmd.data_[3] = PACK_2U32_TO_U64(size.x, size.y);
+        cmd.data_[4] = reinterpret_cast<std::uint64_t>(data_ptr);
+
+        send_sync_command(driver, cmd);
     }
 
     std::uint64_t pack_from_two_floats(const float f1, const float f2) {
@@ -340,7 +394,7 @@ namespace eka2l1::drivers {
         cmd->data_[0] = h;
     }
 
-    void graphics_command_builder::set_dynamic_uniform(const int binding, const drivers::shader_set_var_type var_type,
+    void graphics_command_builder::set_dynamic_uniform(const int binding, const drivers::shader_var_type var_type,
         const void *data, const std::size_t data_size) {
         command *cmd = list_.retrieve_next();
         cmd->opcode_ = graphics_driver_set_uniform;
@@ -687,5 +741,70 @@ namespace eka2l1::drivers {
         cmd->opcode_ = graphics_driver_set_texture_anisotrophy;
         cmd->data_[0] = h;
         cmd->data_[1] = pack_from_two_floats(anisotrophy_fact, 0);
+    }
+    
+    void graphics_command_builder::recreate_renderbuffer(drivers::handle h, const eka2l1::vec2 &size, const drivers::texture_format internal_format) {
+        command *cmd = list_.retrieve_next();
+
+        cmd->opcode_ = graphics_driver_create_renderbuffer;
+        cmd->data_[0] = PACK_2U32_TO_U64(size.x, size.y);
+        cmd->data_[1] = static_cast<std::uint64_t>(internal_format);
+        cmd->data_[2] = h;
+    }
+
+    void graphics_command_builder::set_framebuffer_color_buffer(drivers::handle h, drivers::handle color_buffer, const int face_index, const std::int32_t color_index) {
+        command *cmd = list_.retrieve_next();
+
+        cmd->opcode_ = graphics_driver_set_framebuffer_color_buffer;
+        cmd->data_[0] = h;
+        cmd->data_[1] = color_buffer;
+        cmd->data_[2] = static_cast<std::uint64_t>(face_index);
+        cmd->data_[3] = static_cast<std::uint64_t>(color_index);
+    }
+
+    void graphics_command_builder::set_framebuffer_depth_stencil_buffer(drivers::handle h, drivers::handle depth, const int depth_face_index, drivers::handle stencil, const int stencil_face_index) {
+        command *cmd = list_.retrieve_next();
+
+        cmd->opcode_ = graphics_driver_set_framebuffer_depth_stencil_buffer;
+        cmd->data_[0] = h;
+        cmd->data_[1] = depth;
+        cmd->data_[2] = stencil;
+        cmd->data_[3] = PACK_2U32_TO_U64(depth_face_index, stencil_face_index);
+    }
+
+    void graphics_command_builder::bind_framebuffer(drivers::handle h, drivers::framebuffer_bind_type bind_type) {
+        command *cmd = list_.retrieve_next();
+
+        cmd->opcode_ = graphics_driver_bind_framebuffer;
+        cmd->data_[0] = h;
+        cmd->data_[1] = static_cast<std::uint64_t>(bind_type);
+    }
+
+    void graphics_command_builder::set_blend_colour(const float colour[4]) {
+        command *cmd = list_.retrieve_next();
+
+        cmd->opcode_ = graphics_driver_set_blend_colour;
+        cmd->data_[0] = pack_from_two_floats(colour[0], colour[1]);
+        cmd->data_[1] = pack_from_two_floats(colour[2], colour[3]);
+    }
+
+    void advance_draw_pos_around_origin(eka2l1::rect &origin_normal_rect, const int rotation) {
+        switch (rotation) {
+        case 90:
+            origin_normal_rect.top.x += origin_normal_rect.size.x;
+            break;
+
+        case 180:
+            origin_normal_rect.top.x += origin_normal_rect.size.x;
+            origin_normal_rect.top.y += origin_normal_rect.size.y;
+            break;
+
+        case 270:
+            origin_normal_rect.top.y += origin_normal_rect.size.y;
+            break;
+
+        default:
+            break;
+        }
     }
 }

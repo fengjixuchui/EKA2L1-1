@@ -563,6 +563,7 @@ namespace eka2l1 {
         file *vfs_file = reinterpret_cast<file *>(node->vfs_node.get());
 
         // Reset its status, so seek back, this is just in case it got used again
+        vfs_file->flush();
         vfs_file->seek(0, file_seek_mode::beg);
 
         obj_table_.remove(*handle_res);
@@ -707,6 +708,11 @@ namespace eka2l1 {
             return;
         }
 
+        if (eka2l1::filename(target_file_path.value()).empty()) {
+            ctx->complete(epoc::error_bad_name);
+            return;
+        }
+
         if (!old_read_model && (ctx->msg->function & 0x00040000)) {
             // The position is in a package
             auto position_package = ctx->get_argument_data_from_descriptor<std::uint64_t>(2);
@@ -744,7 +750,13 @@ namespace eka2l1 {
         io_system *io = ctx->sys->get_io_system();
         symfile target_file = io->open_file(target_file_path.value(), READ_MODE | BIN_MODE);
 
-        if (!target_file) {
+        if (!target_file || !target_file->valid()) {
+            // Exist but not a file
+            if (io->exist(target_file_path.value())) {
+                ctx->complete(epoc::error_bad_name);
+                return;
+            }
+
             ctx->complete(epoc::error_path_not_found);
             return;
         }

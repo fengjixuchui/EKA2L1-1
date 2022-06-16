@@ -28,27 +28,91 @@
 #include <sstream>
 
 namespace eka2l1::drivers {
+    static shader_var_type gl_enum_to_shader_var_type(const GLenum val) {
+        switch (val) {
+        case GL_FLOAT:
+            return shader_var_type::real;
+
+        case GL_BOOL:
+            return shader_var_type::boolean;
+
+        case GL_INT:
+            return shader_var_type::integer;
+
+        case GL_FLOAT_VEC2:
+            return shader_var_type::vec2;
+
+        case GL_FLOAT_VEC3:
+            return shader_var_type::vec3;
+
+        case GL_FLOAT_VEC4:
+            return shader_var_type::vec4;
+
+        case GL_INT_VEC2:
+            return shader_var_type::ivec2;
+
+        case GL_INT_VEC3:
+            return shader_var_type::ivec3;
+
+        case GL_INT_VEC4:
+            return shader_var_type::ivec4;
+
+        case GL_BOOL_VEC2:
+            return shader_var_type::bvec2;
+
+        case GL_SAMPLER_1D:
+            return shader_var_type::sampler1d;
+
+        case GL_SAMPLER_2D:
+            return shader_var_type::sampler2d;
+
+        case GL_SAMPLER_CUBE:
+            return shader_var_type::sampler_cube;
+
+        case GL_FLOAT_MAT2:
+            return shader_var_type::mat2;
+
+        case GL_FLOAT_MAT3:
+            return shader_var_type::mat3;
+
+        case GL_FLOAT_MAT4:
+            return shader_var_type::mat4;
+
+        default:
+            break;
+        }
+
+        return shader_var_type::real;
+    }
+
     /**
       * \brief Build a shader program's metadata. This is for client who desired performance, traded for memory.
       */
     static void build_metadata(GLuint program, std::vector<std::uint8_t> &data) {
         GLint total_attributes = 0;
         GLint total_uniforms = 0;
+        GLint max_attribute_name_len = 0;
+        GLint max_uniform_name_len = 0;
 
         glGetProgramiv(program, GL_ACTIVE_ATTRIBUTES, &total_attributes);
         glGetProgramiv(program, GL_ACTIVE_UNIFORMS, &total_uniforms);
+        glGetProgramiv(program, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &max_attribute_name_len);
+        glGetProgramiv(program, GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_uniform_name_len);
 
-        data.resize(8);
+        data.resize(16);
 
-        reinterpret_cast<std::uint16_t *>(&data[0])[0] = 8;
+        reinterpret_cast<std::uint16_t *>(&data[0])[0] = 16;
 
         GLchar buf[257];
         GLint size = 0;
         GLsizei name_len = 0;
         GLenum type = 0;
 
+        std::vector<std::uint16_t> offsets;
+
         for (int i = 0; i < total_attributes; i++) {
             glGetActiveAttrib(program, i, 256, &name_len, &size, &type, buf);
+            offsets.push_back(static_cast<std::uint16_t>(data.size()));
 
             // Push
             data.push_back(static_cast<std::uint8_t>(name_len));
@@ -57,25 +121,55 @@ namespace eka2l1::drivers {
             buf[name_len] = '\0';
 
             std::int32_t location = glGetAttribLocation(program, buf);
+            shader_var_type var_type = gl_enum_to_shader_var_type(type);
+
             data.insert(data.end(), reinterpret_cast<std::uint8_t *>(&location), reinterpret_cast<std::uint8_t *>(&location) + sizeof(location));
+            data.insert(data.end(), reinterpret_cast<std::uint8_t *>(&var_type), reinterpret_cast<std::uint8_t*>(&var_type + 1));            
+            data.insert(data.end(), reinterpret_cast<std::uint8_t *>(&size), reinterpret_cast<std::uint8_t *>(&size + 1));
+        }
+
+        for (int i = 0; i < total_attributes; i++) {
+            data.insert(data.end(), reinterpret_cast<std::uint8_t *>(&offsets[i]), reinterpret_cast<std::uint8_t *>(&offsets[i] + 1));
         }
 
         reinterpret_cast<std::uint16_t *>(&data[0])[1] = static_cast<std::uint16_t>(data.size());
         reinterpret_cast<std::uint16_t *>(&data[0])[2] = static_cast<std::uint16_t>(total_attributes);
         reinterpret_cast<std::uint16_t *>(&data[0])[3] = static_cast<std::uint16_t>(total_uniforms);
+        reinterpret_cast<std::uint16_t *>(&data[0])[4] = static_cast<std::uint16_t>(max_attribute_name_len);
+        reinterpret_cast<std::uint16_t *>(&data[0])[5] = static_cast<std::uint16_t>(max_uniform_name_len);
+
+        offsets.clear();
 
         for (int i = 0; i < total_uniforms; i++) {
             glGetActiveUniform(program, i, 256, &name_len, &size, &type, buf);
-
-            buf[name_len] = '\0';
+            
+            // NOTE: Compliant with some GLES2 driver. Fix for Let's create pottery
+            // Our abstract layer are meant to be for emulator, so I hope this is ok to do it in here. Much easier logic
+            // See more info at https://bugs.chromium.org/p/angleproject/issues/detail?id=136
+            GLsizei insert_name_len = name_len;
+            if ((name_len > 3) && (buf[name_len - 3] == '[') && (buf[name_len - 2] == '0') && (buf[name_len - 1] == ']')) {
+                insert_name_len -= 3;
+            }
 
             // Push
-            data.push_back(static_cast<std::uint8_t>(name_len));
-            data.insert(data.end(), buf, buf + name_len);
+            offsets.push_back(static_cast<std::uint16_t>(data.size()));
+            data.push_back(static_cast<std::uint8_t>(insert_name_len));
+            data.insert(data.end(), buf, buf + insert_name_len);
 
             std::int32_t location = glGetUniformLocation(program, buf);
+            shader_var_type var_type = gl_enum_to_shader_var_type(type);
+
             data.insert(data.end(), reinterpret_cast<std::uint8_t *>(&location), reinterpret_cast<std::uint8_t *>(&location) + sizeof(location));
+            data.insert(data.end(), reinterpret_cast<std::uint8_t *>(&var_type), reinterpret_cast<std::uint8_t*>(&var_type + 1));
+            data.insert(data.end(), reinterpret_cast<std::uint8_t *>(&size), reinterpret_cast<std::uint8_t *>(&size + 1));
         }
+        
+        for (int i = 0; i < total_uniforms; i++) {
+            data.insert(data.end(), reinterpret_cast<std::uint8_t *>(&offsets[i]), reinterpret_cast<std::uint8_t *>(&offsets[i] + 1));
+        }
+        
+        reinterpret_cast<std::uint16_t *>(&data[0])[6] = static_cast<std::uint16_t>(data.size());
+        reinterpret_cast<std::uint16_t *>(&data[0])[7] = 0;     // Reserved
     }
 
     ogl_shader_module::ogl_shader_module()
@@ -108,7 +202,7 @@ namespace eka2l1::drivers {
             glDeleteShader(shader);
     }
 
-    bool ogl_shader_module::create(graphics_driver *driver, const char *data, const std::size_t size, const shader_module_type type) {
+    bool ogl_shader_module::create(graphics_driver *driver, const char *data, const std::size_t size, const shader_module_type type, std::string *compile_log) {
         shader = glCreateShader(((type == shader_module_type::vertex) ? GL_VERTEX_SHADER :
             ((type == shader_module_type::fragment) ? GL_FRAGMENT_SHADER : GL_GEOMETRY_SHADER)));
 
@@ -116,15 +210,27 @@ namespace eka2l1::drivers {
         glCompileShader(shader);
 
         int success;
-        char error[512] = { '\0' };
-
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 
+        GLint log_length;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
+
+        if (compile_log) {
+            compile_log->resize(log_length);
+            glGetShaderInfoLog(shader, log_length, nullptr, compile_log->data());
+        }
+
         if (!success) {
-            glGetShaderInfoLog(shader, 512, nullptr, error);
-            LOG_ERROR(DRIVER_GRAPHICS, "Error while compiling shader: {}, abort", error);
+            if (!compile_log) {
+                std::string error_log(log_length, '\0');
+                glGetShaderInfoLog(shader, log_length, nullptr, error_log.data());
+
+                LOG_ERROR(DRIVER_GRAPHICS, "Error while compiling shader: {}, abort", error_log);
+            }
 
             glDeleteShader(shader);
+            shader = 0;
+
             return false;
         }
 
@@ -150,7 +256,7 @@ namespace eka2l1::drivers {
         }
     }
 
-    bool ogl_shader_program::create(graphics_driver *driver, shader_module *vertex_module, shader_module *fragment_module) {
+    bool ogl_shader_program::create(graphics_driver *driver, shader_module *vertex_module, shader_module *fragment_module, std::string *link_log) {
         ogl_shader_module *ogl_vertex_module = reinterpret_cast<ogl_shader_module*>(vertex_module);
         ogl_shader_module *ogl_fragment_module = reinterpret_cast<ogl_shader_module*>(fragment_module);
 
@@ -171,11 +277,21 @@ namespace eka2l1::drivers {
         glLinkProgram(program);
         glGetProgramiv(program, GL_LINK_STATUS, &success);
 
-        if (!success) {
-            char error[512] = { '\0' };
+        GLint log_length = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &log_length);
 
-            glGetProgramInfoLog(program, 512, nullptr, error);
-            LOG_ERROR(DRIVER_GRAPHICS, "Error while linking shader program: {}", error);
+        if (link_log) {
+            link_log->resize(log_length);
+            glGetProgramInfoLog(program, log_length, nullptr, link_log->data());
+        }
+
+        if (!success) {
+            if (!link_log) {
+                std::string error(log_length, '\0');
+
+                glGetProgramInfoLog(program, log_length, nullptr, error.data());
+                LOG_ERROR(DRIVER_GRAPHICS, "Error while linking shader program: {}", error);
+            }
 
             glDeleteProgram(program);
             return false;

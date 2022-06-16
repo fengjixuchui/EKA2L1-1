@@ -77,16 +77,16 @@ namespace eka2l1::drivers {
 
     /** \brief Create a new shader module.
       *
-      * \param driver      The driver associated with the program. 
-      * \param data        Pointer to the vertex/fragment shader code.
-      * \param size        Size of vertex/fragment shader code in bytes.
-      * \param type        The type of the shader module.
-      * \param metadata    Pointer to metadata struct. Some API may provide this.
+      * \param driver       The driver associated with the program. 
+      * \param data         Pointer to the vertex/fragment shader code.
+      * \param size         Size of vertex/fragment shader code in bytes.
+      * \param type         The type of the shader module.
+      * \param compile_log  Pointer to an optional string object, that hold compile log. It may be important on compile failure.
       *
       * \returns Handle to the program.
       */
     drivers::handle create_shader_module(graphics_driver *driver, const char *data, const std::size_t size,
-        drivers::shader_module_type type);
+        drivers::shader_module_type type, std::string *compile_log = nullptr);
 
     /**
      * @brief Create a shader program from existing shader modules.
@@ -95,11 +95,12 @@ namespace eka2l1::drivers {
      * @param vertex_module     Handle to the vertex shader module created.
      * @param fragment_module   Handle to the fragment shader module created.
      * @param metadata          If this is not null, the metadata object is filled with this shader program's metadata.
+     * @param link_log          If this is not null, on return the log is filled with linking info.
      * 
      * @return A valid handle on success.
      */
     drivers::handle create_shader_program(graphics_driver *driver, drivers::handle vertex_module,
-        drivers::handle fragment_module, shader_program_metadata *metadata);
+        drivers::handle fragment_module, shader_program_metadata *metadata, std::string *link_log = nullptr);
 
     /**
      * \brief Create a new texture.
@@ -120,6 +121,20 @@ namespace eka2l1::drivers {
         drivers::texture_format internal_format, drivers::texture_format data_format, drivers::texture_data_type data_type,
         const void *data, const std::size_t total_data_size, const eka2l1::vec3 &size, const std::size_t pixels_per_line = 0,
         const std::uint32_t unpack_alignment = 4);
+
+    /**
+     * @brief Create a new renderbuffer.
+     * 
+     * This is a surface that does not allow direct upload from the client, used for framebuffer. Depends on implementation,
+     * this may simply be a texture.
+     * 
+     * @param driver                The driver associated with this renderbuffer.
+     * @param size                  The dimension of the renderbuffer.
+     * @param internal_format       The internal format used to store the surface data.
+     * 
+     * @returns Handle to the renderbuffer. 0 on failure.
+     */
+    drivers::handle create_renderbuffer(graphics_driver *driver, const eka2l1::vec2 &size, const drivers::texture_format internal_format);
 
     /**
      * \brief Create a new buffer.
@@ -143,6 +158,26 @@ namespace eka2l1::drivers {
     drivers::handle create_input_descriptors(graphics_driver *driver, input_descriptor *descriptors, const std::uint32_t count);
 
     /**
+     * @brief Create a framebuffer object.
+     * 
+     * If the framebuffer to use DEPTH24_STENCIL8, let the depth and stencil buffer point to the same handle.
+     * 
+     * @param driver                 The driver associated with the framebuffer.
+     * @param color_buffers          An array containing list of color buffers that will be attached to this framebuffer.
+     * @param color_face_indicies    An array specify the index of the face (in case the drawable is a cube map) of the texture to render to.
+     * @param color_buffer_count     The number of color buffer in the array upper.
+     * @param depth_buffer           Handle to the depth buffer (texture/renderbuffer).
+     * @param depth_face_index       The index of the face in texture to render the depth buffer to.
+     * @param stencil_buffer         Handle to the stencil buffer (texture/renderbuffer).
+     * @param stencil_face_index       The index of the face in texture to render the depth buffer to.
+     * 
+     * @return Non-zero handle on success.
+     */
+    drivers::handle create_framebuffer(graphics_driver *driver, const drivers::handle *color_buffers, const int *color_face_indicies,
+        const std::uint32_t color_buffer_count, drivers::handle depth_buffer, const int depth_face_index,
+        drivers::handle stencil_buffer, const int stencil_face_index);
+
+    /**
      * @brief Read bitmap data from a region into memory buffer.
      * 
      * The data will also be word-aligned each line pitch.
@@ -158,6 +193,20 @@ namespace eka2l1::drivers {
      */
     bool read_bitmap(graphics_driver *driver, drivers::handle h, const eka2l1::point &pos, const eka2l1::object_size &size,
         const std::uint32_t bpp, std::uint8_t *buffer_ptr);
+
+    /**
+     * @brief   Read framebuffer data from a region into memory buffer.
+     * 
+     * The data will also be word-aligned each line pitch.
+     * 
+     * @param h             Handle to the bitmap.
+     * @param pos           The position to start clipping framebuffer data from.
+     * @param size          The size of the clipped framebuffer region.
+     * @param format        The layout format that will be written to the memory.
+     * @param dt            The data type per component.
+     * @param data_ptr      The pointer to the framebuffer data.
+     */
+    void read_framebuffer(graphics_driver *driver, drivers::handle h, const eka2l1::vec2 pos, const eka2l1::vec2 size, drivers::texture_format format, drivers::texture_data_type dt, void *data_ptr);
 
     static constexpr std::size_t MAX_THRESHOLD_TO_FLUSH = 12000;
     static constexpr std::size_t MAX_CAP_COMMAND_COUNT = 12800;
@@ -358,7 +407,7 @@ namespace eka2l1::drivers {
          * @param data          The data to set to the uniform variable.
          * @param data_size     The size of the data buffer in bytes.
          */
-        void set_dynamic_uniform(const int binding, const drivers::shader_set_var_type var_type,
+        void set_dynamic_uniform(const int binding, const drivers::shader_var_type var_type,
             const void *data, const std::size_t data_size);
 
         /**
@@ -666,5 +715,15 @@ namespace eka2l1::drivers {
         void set_depth_bias(float constant_factor, float clamp, float slope_factor);
 
         void set_depth_range(const float min, const float max);
+
+        void set_blend_colour(const float colour[4]);
+
+        void recreate_renderbuffer(drivers::handle h, const eka2l1::vec2 &size, const drivers::texture_format internal_format);
+
+        void set_framebuffer_color_buffer(drivers::handle h, drivers::handle color_buffer, const int face_index, const std::int32_t color_index = -1);
+        void set_framebuffer_depth_stencil_buffer(drivers::handle h, drivers::handle depth, const int depth_face_index, drivers::handle stencil, const int stencil_face_index);
+        void bind_framebuffer(drivers::handle h, drivers::framebuffer_bind_type bind_type);
     };
+
+    void advance_draw_pos_around_origin(eka2l1::rect &origin_normal_rect, const int rotation);
 }

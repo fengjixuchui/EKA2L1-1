@@ -70,26 +70,6 @@ static constexpr const char *LAST_MOUNT_FOLDER_SETTING = "lastMountFolder";
 static constexpr const char *NO_DEVICE_INSTALL_DISABLE_NOF_SETTING = "disableNoDeviceInstallNotify";
 static constexpr const char *NO_TOUCHSCREEN_DISABLE_WARN_SETTING = "disableNoTouchscreenWarn";
 
-static void advance_dsa_pos_around_origin(eka2l1::rect &origin_normal_rect, const int rotation) {
-    switch (rotation) {
-    case 90:
-        origin_normal_rect.top.x += origin_normal_rect.size.x;
-        break;
-
-    case 180:
-        origin_normal_rect.top.x += origin_normal_rect.size.x;
-        origin_normal_rect.top.y += origin_normal_rect.size.y;
-        break;
-
-    case 270:
-        origin_normal_rect.top.y += origin_normal_rect.size.y;
-        break;
-
-    default:
-        break;
-    }
-}
-
 static void mode_change_screen(void *userdata, eka2l1::epoc::screen *scr, const int old_mode) {
     eka2l1::desktop::emulator *state_ptr = reinterpret_cast<eka2l1::desktop::emulator *>(userdata);
     if (!state_ptr) {
@@ -179,7 +159,7 @@ static void draw_emulator_screen(void *userdata, eka2l1::epoc::screen *scr, cons
     dest.top = eka2l1::vec2(x, y);
     dest.size = eka2l1::vec2(width, height);
 
-    advance_dsa_pos_around_origin(dest, scr->ui_rotation);
+    eka2l1::drivers::advance_draw_pos_around_origin(dest, scr->ui_rotation);
 
     if (scr->ui_rotation % 180 != 0) {
         std::swap(dest.size.x, dest.size.y);
@@ -356,7 +336,7 @@ void main_window::setup_app_list() {
         eka2l1::fbs_server *fbs_serv = reinterpret_cast<eka2l1::fbs_server *>(kernel->get_by_name<eka2l1::service::server>(fbs_server_name));
 
         if (al_serv && fbs_serv) {
-            applist_ = new applist_widget(this, al_serv, fbs_serv, system->get_io_system(), true);
+            applist_ = new applist_widget(this, al_serv, fbs_serv, system->get_io_system(), emulator_state_.conf.hide_system_apps, true);
             ui_->layout_main->addWidget(applist_);
 
             connect(applist_, &applist_widget::app_launch, this, &main_window::on_app_clicked);
@@ -460,6 +440,8 @@ void main_window::on_settings_triggered() {
         connect(settings_dialog_.data(), &settings_dialog::minimum_display_size_change, this, &main_window::force_update_display_minimum_size);
         connect(settings_dialog_.data(), &settings_dialog::active_app_setting_changed, this, &main_window::on_app_setting_changed, Qt::DirectConnection);
         connect(settings_dialog_.data(), &settings_dialog::window_title_setting_changed, this, &main_window::on_window_title_setting_changed);
+        connect(settings_dialog_.data(), &settings_dialog::hide_system_apps_changed, this, &main_window::on_hide_system_apps_changed, Qt::DirectConnection);
+
         connect(this, &main_window::app_launching, settings_dialog_.data(), &settings_dialog::on_app_launching);
         connect(this, &main_window::controller_button_press, settings_dialog_.data(), &settings_dialog::on_controller_button_press);
         connect(this, &main_window::screen_focus_group_changed, settings_dialog_.data(), &settings_dialog::refresh_app_configuration_details);
@@ -1271,4 +1253,10 @@ void main_window::on_input_dialog_close_request() {
     }
 
     input_complete_callback_ = nullptr;
+}
+
+void main_window::on_hide_system_apps_changed() {
+    if (applist_) {
+        applist_->set_hide_system_apps(emulator_state_.conf.hide_system_apps);
+    }
 }
