@@ -72,6 +72,17 @@ namespace eka2l1 {
         }
     }
 
+    fs_node::~fs_node() {
+        if (temporary) {
+            io_system *io = serv->get_system()->get_io_system();
+
+            if (vfs_node->type == io_component_type::file) { 
+                file *vfs_file = reinterpret_cast<file *>(vfs_node.get());
+                serv->temporary_file_cleanset_.emplace(common::lowercase_ucs2_string(vfs_file->file_name()));
+            }
+        }
+    }
+
     void fs_node::deref() {
         if (vfs_node->type == io_component_type::file) {        
             file *vfs_file = reinterpret_cast<file *>(vfs_node.get());
@@ -84,10 +95,6 @@ namespace eka2l1 {
                     serv->attribs.erase(ite);
                 }
             }
-        }
-
-        if (count == 1) {
-            vfs_node.reset();
         }
 
         epoc::ref_count_object::deref();
@@ -209,7 +216,20 @@ namespace eka2l1 {
             return;
         }
 
-        int size = *ctx->get_argument_value<std::int32_t>(0);
+        std::uint64_t size = 0;
+
+        // UINT64 is passed in a descriptor
+        if (ctx->msg->function & 0x10000) {
+            std::optional<std::uint64_t> size_opt = ctx->get_argument_data_from_descriptor<std::uint64_t>(0);
+            if (!size_opt.value()) {
+                ctx->complete(epoc::error_argument);
+            } else {
+                size = size_opt.value();
+            }
+        } else {
+            size = static_cast<std::uint64_t>(ctx->get_argument_value<std::int32_t>(0).value());
+        }
+
         file *f = reinterpret_cast<file *>(node->vfs_node.get());
         std::size_t fsize = f->size();
 
@@ -936,6 +956,7 @@ namespace eka2l1 {
         new_node->mix_mode = real_mode;
         new_node->open_mode = access_mode;
         new_node->process = own_pr_uid;
+        new_node->temporary = temporary;
         new_node->serv = server<fs_server>();
 
         return obj_table_.add(new_node);

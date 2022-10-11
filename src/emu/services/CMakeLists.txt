@@ -20,9 +20,18 @@ add_library(epocservs
         include/services/audio/keysound/ringtab.h
         include/services/audio/mmf/audio.h
         include/services/audio/mmf/dev.h
-        include/services/bluetooth/protocols/btlink/btlink.h
+        include/services/backup/backup.h
+        include/services/bluetooth/protocols/btlink/btlink_inet.h
+        include/services/bluetooth/protocols/l2cap/l2cap_inet.h
+        include/services/bluetooth/protocols/rfcomm/rfcomm_inet.h
+        include/services/bluetooth/protocols/sdp/pdu_builder.h
+        include/services/bluetooth/protocols/sdp/sdp_inet.h
+        include/services/bluetooth/protocols/asker_inet.h
+        include/services/bluetooth/protocols/base_inet.h
+        include/services/bluetooth/protocols/btmidman_inet.h
         include/services/bluetooth/protocols/common.h
         include/services/bluetooth/protocols/overall.h
+        include/services/bluetooth/bt.h
         include/services/bluetooth/btman.h
         include/services/bluetooth/btmidman.h
         include/services/centralrepo/centralrepo.h
@@ -84,6 +93,7 @@ add_library(epocservs
         include/services/msv/store.h
         include/services/notifier/notifier.h
         include/services/notifier/queries.h
+        include/services/redir/redir.h
         include/services/remcon/common.h
         include/services/remcon/controller.h
         include/services/remcon/remcon.h
@@ -148,9 +158,18 @@ add_library(epocservs
         src/audio/keysound/keysound.cpp
         src/audio/mmf/audio.cpp
         src/audio/mmf/dev.cpp
-        src/bluetooth/protocols/btlink/resolver.cpp
-        src/bluetooth/protocols/l2cap/socket.cpp
+        src/backup/backup.cpp
+        src/bluetooth/protocols/btlink/resolver_inet.cpp
+        src/bluetooth/protocols/l2cap/socket_inet.cpp
+        src/bluetooth/protocols/rfcomm/rfcomm_inet.cpp
+        src/bluetooth/protocols/sdp/pdu_builder.cpp
+        src/bluetooth/protocols/sdp/sdp_inet.cpp
+        src/bluetooth/protocols/asker_inet.cpp
+        src/bluetooth/protocols/base_inet.cpp
+        src/bluetooth/protocols/btmidman_inet.cpp
+        src/bluetooth/protocols/common.cpp
         src/bluetooth/protocols/overall.cpp
+        src/bluetooth/bt.cpp
         src/bluetooth/btman.cpp
         src/bluetooth/btmidman.cpp
         src/centralrepo/centralrepo.cpp
@@ -210,6 +229,7 @@ add_library(epocservs
         src/msv/store.cpp
         src/notifier/notifier.cpp
         src/notifier/queries.cpp
+        src/redir/redir.cpp
         src/remcon/common.cpp
         src/remcon/controller.cpp
         src/remcon/remcon.cpp
@@ -227,6 +247,7 @@ add_library(epocservs
         src/sms/settings.cpp
         src/socket/agent/genconn.cpp
         src/socket/connection.cpp
+        src/socket/netdb.cpp
         src/socket/protocol.cpp
         src/socket/resolver.cpp
         src/socket/socket.cpp

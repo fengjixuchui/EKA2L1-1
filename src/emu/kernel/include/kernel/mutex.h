@@ -29,11 +29,14 @@ namespace eka2l1 {
         /*! \brief A mutex kernel object. 
         */
         class mutex : public kernel_obj {
+            friend class condvar;
+
             //! The lock count
             int lock_count;
 
             //! Thread holding
             kernel::thread *holding;
+            bool wait_for_timeout;
 
             kernel::thread_priority_queue waits;
             common::roundabout pendings;
@@ -47,6 +50,7 @@ namespace eka2l1 {
 
         protected:
             void wake_next_thread();
+            void transfer_suspend_from_condvar(thread *thr);
 
         public:
             mutex(kernel_system *kern, ntimer *timing)
@@ -64,8 +68,8 @@ namespace eka2l1 {
             */
             void waking_up_from_suspension(std::uint64_t userdata, int cycles_late);
 
-            void wait();
-            void try_wait();
+            void wait(thread *thr);
+            void try_wait(thread *thr);
 
             void wait_for(int usecs);
 

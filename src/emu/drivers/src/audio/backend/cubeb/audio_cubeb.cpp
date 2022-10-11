@@ -25,6 +25,8 @@
 
 #if EKA2L1_PLATFORM(WIN32)
 #include <objbase.h>
+#elif EKA2L1_PLATFORM(ANDROID)
+#include <common/android/audio.h>
 #endif
 
 namespace eka2l1::drivers {
@@ -71,5 +73,19 @@ namespace eka2l1::drivers {
         }
 
         return std::make_unique<cubeb_audio_output_stream>(this, context_, sample_rate, channels, callback);
+    }
+
+    std::unique_ptr<audio_input_stream> cubeb_audio_driver::new_input_stream(const std::uint32_t sample_rate,
+        const std::uint8_t channels, data_callback callback) {
+        if (!init_) {
+            return nullptr;
+        }
+
+#if EKA2L1_PLATFORM(ANDROID)
+        // If it does not work, just try our luck... ;D
+        common::android::prepare_audio_record();
+#endif
+
+        return std::make_unique<cubeb_audio_input_stream>(this, context_, sample_rate, channels, callback);
     }
 };

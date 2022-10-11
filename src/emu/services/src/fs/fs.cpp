@@ -131,7 +131,7 @@ namespace eka2l1 {
         }
 
         // Check if the path has a root directory
-        if (!eka2l1::has_root_dir(target_path)) {
+        if (!eka2l1::has_root_name(target_path)) {
             return eka2l1::add_path(session_path, target_path, true);
         }
 
@@ -172,6 +172,13 @@ namespace eka2l1 {
 
         system_drive_prop->first = static_cast<int>(FS_UID);
         system_drive_prop->second = static_cast<int>(SYSTEM_DRIVE_KEY);
+    }
+
+    fs_server::~fs_server() {
+        io_system *io = sys->get_io_system();
+        for (const std::u16string &path: temporary_file_cleanset_) {
+            io->delete_entry(path);
+        }
     }
 
     void fs_server_client::fetch(service::ipc_context *ctx) {
@@ -294,6 +301,7 @@ namespace eka2l1 {
             HANDLE_CLIENT_IPC(server<fs_server>()->set_default_system_path, epoc::fs_msg_set_default_path, "Fs::SetDefaultPath");
             HANDLE_CLIENT_IPC(server<fs_server>()->get_default_system_path, epoc::fs_msg_default_path, "Fs::DefaultPath");
             HANDLE_CLIENT_IPC(is_file_opened, epoc::fs_msg_is_file_open, "Fs::IsFileOpen");
+            HANDLE_CLIENT_IPC(filesystem_name, epoc::fs_msg_filesystem_name, "Fs::IsFileOpen");
 
         case epoc::fs_msg_base_close:
             if (ctx->sys->get_symbian_version_use() < epocver::eka2) {
@@ -698,7 +706,7 @@ namespace eka2l1 {
             return;
         }
 
-        dir.value() = eka2l1::absolute_path(dir.value(), ss_path, true);
+        dir.value() = get_full_symbian_path(ss_path, dir.value());
 
         if (!check_path_capabilities_pass(dir.value(), ctx->msg->own_thr->owning_process(), epoc::fs::private_comp_access_policy, epoc::fs::sys_resource_modify_access_policy, epoc::fs::sys_resource_modify_access_policy)) {
             ctx->complete(epoc::error_permission_denied);
@@ -870,6 +878,21 @@ namespace eka2l1 {
         const std::int32_t result = server<fs_server>()->is_file_opened(final_path);
 
         ctx->write_data_to_descriptor_argument<std::int32_t>(1, result);
+        ctx->complete(epoc::error_none);
+    }
+
+    void fs_server_client::filesystem_name(service::ipc_context *ctx) {
+        std::optional<std::uint32_t> drv_val = ctx->get_argument_value<std::uint32_t>(1);
+
+        if (!drv_val.has_value()) {
+            ctx->complete(epoc::error_argument);
+            return;
+        }
+
+        drive_number drv = static_cast<drive_number>(drv_val.value());
+        std::u16string fs_stub_name = (drv == drive_z) ? u"ROFS" : u"FAT";
+
+        ctx->write_arg(0, fs_stub_name);
         ctx->complete(epoc::error_none);
     }
 }

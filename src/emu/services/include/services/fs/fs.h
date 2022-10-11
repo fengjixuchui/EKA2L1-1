@@ -88,6 +88,7 @@ namespace eka2l1 {
         kernel::uid process{ 0 };
 
         void deref() override;
+        ~fs_node() override;
     };
 
     struct fs_path_case_insensitive_hasher {
@@ -186,6 +187,7 @@ namespace eka2l1 {
         void drive(service::ipc_context *ctx);
         void volume(service::ipc_context *ctx);
         void is_file_opened(service::ipc_context *ctx);
+        void filesystem_name(service::ipc_context *ctx);
 
         bool is_file_opened_here(const std::u16string &path);
 
@@ -319,10 +321,13 @@ namespace eka2l1 {
         };
 
         std::uint32_t flags;
+        std::set<std::u16string> temporary_file_cleanset_;
+
         void init();
 
     public:
         explicit fs_server(system *sys);
+        ~fs_server() override;
 
         service::uid get_owner_secure_uid() const override {
             return 0x100039E3;

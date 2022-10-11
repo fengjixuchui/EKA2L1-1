@@ -460,6 +460,7 @@ namespace eka2l1::epoc {
                 drawer->sleep(static_cast<std::uint32_t>(wait_time));
             }
 
+            content_changed(false);
             return wait_time;
         }
 
@@ -843,6 +844,11 @@ namespace eka2l1::epoc {
 
         case EWsWinOpFixNativeOrientation:
             fix_native_orientation(ctx, cmd);
+            break;
+
+        case EWsWinOpSetSurfaceTransparency:
+        case EWsWinOpSendEffectCommand:
+            ctx.complete(epoc::error_none);
             break;
 
         default: {
@@ -1513,12 +1519,6 @@ namespace eka2l1::epoc {
         if (size().x == 0 || size().y == 0) {
             // No one can see this. Leave it for now.
             return false;
-        }
-
-        if (!content_changed()) {
-            if ((scr->flags_ & screen::FLAG_CLIENT_REDRAW_PENDING) && !(scr->flags_ & screen::FLAG_SERVER_REDRAW_PENDING)) {
-                return false;
-            }
         }
 
         builder.set_feature(drivers::graphics_feature::blend, false);

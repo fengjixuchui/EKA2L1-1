@@ -77,6 +77,11 @@ namespace eka2l1::config {
         void deserialize(const std::string &file = KEYBIND_DEFAULT_FILE);
     };
 
+    struct friend_address {
+        std::string addr_;
+        std::uint32_t port_;
+    };
+
     struct state {
         float ui_scale{ 1.0 };
         std::string bkg_path;
@@ -97,6 +102,7 @@ namespace eka2l1::config {
 
         bool enable_gdbstub{ false };
         int gdb_port{ 24689 };
+        int internet_bluetooth_port{ 35689 };
 
         std::string storage = "data"; // Set this to dot, avoid making it absolute
 
@@ -138,11 +144,18 @@ namespace eka2l1::config {
         std::string hsb_bank_path{ "resources/defaultbank.hsb" };
         std::string sf2_bank_path{ "resources/defaultbank.sf2" };
         std::string log_filter{ DEFAULT_LOG_FILTERING };
+        std::string bt_central_server_url{ "btnetplay.12z1.com" };
 
         screen_buffer_sync_option screen_buffer_sync{ screen_buffer_sync_option_preferred };
         midi_backend_type midi_backend{ MIDI_BACKEND_TSF };
 
         std::atomic<std::uint32_t> display_background_color{ 0xFFD0D0D0 };
+        std::vector<friend_address> friend_addresses;
+
+        std::uint32_t btnet_port_offset{ 15000 };
+        bool enable_upnp{ true };
+		std::string btnet_password;
+		std::uint32_t btnet_discovery_mode{ 0 };
 
         void serialize(const bool with_bindings = true);
         void deserialize(const bool with_bindings = true);

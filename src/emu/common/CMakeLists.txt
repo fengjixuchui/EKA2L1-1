@@ -57,6 +57,7 @@ add_library(common
         include/common/types.h
         include/common/unicode.h
         include/common/url.h
+        include/common/upnp.h
         include/common/region.h
         include/common/virtualmem.h
         include/common/watcher.h
@@ -93,6 +94,7 @@ add_library(common
         src/types.cpp
         src/unicode.cpp
         src/url.cpp
+        src/upnp.cpp
         src/region.cpp
         src/virtualmem.cpp
         src/watcher.cpp
@@ -102,9 +104,11 @@ add_library(common
 
 if (ANDROID)
     target_sources(common PRIVATE
+        include/common/android/audio.h
         include/common/android/storage.h
         include/common/android/jniutils.h
         include/common/android/contenturi.h
+        src/android/audio.cpp
         src/android/storage.cpp
         src/android/jniutils.cpp
         )
@@ -112,7 +116,7 @@ endif()
 
 target_include_directories(common PUBLIC include)
 target_link_libraries(common PUBLIC fmt miniz spdlog)
-target_link_libraries(common PRIVATE pugixml)
+target_link_libraries(common PRIVATE pugixml miniupnpc::miniupnpc)
 
 if (UNIX OR APPLE)
     set_property(TARGET common PROPERTY POSITION_INDEPENDENT_CODE ON)

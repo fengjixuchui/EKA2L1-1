@@ -27,11 +27,11 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.content.res.TypedArray;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Bundle;
-import android.os.Process;
 import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.Display;
@@ -48,6 +48,8 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
@@ -71,13 +73,22 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class EmulatorActivity extends AppCompatActivity {
     private static final int ORIENTATION_DEFAULT = 0;
     private static final int ORIENTATION_AUTO = 1;
     private static final int ORIENTATION_PORTRAIT = 2;
     private static final int ORIENTATION_LANDSCAPE = 3;
+
+    private final ActivityResultLauncher<String[]> permissionsLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(),
+            this::onPermissionResult);
+
+    private Semaphore permissionsLauncherDone = new Semaphore(0);
 
     private Toolbar toolbar;
     private OverlayView overlayView;
@@ -94,6 +105,11 @@ public class EmulatorActivity extends AppCompatActivity {
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        Intent intent = getIntent();
+        if (intent.getBooleanExtra(KEY_APP_IS_SHORTCUT, false)) {
+            Emulator.initializeForShortcutLaunch(this);
+        }
+
         AppDataStore dataStore = AppDataStore.getAndroidStore();
         setTheme(dataStore.getString(PREF_THEME, "light"));
         super.onCreate(savedInstanceState);
@@ -122,12 +138,8 @@ public class EmulatorActivity extends AppCompatActivity {
             getSupportActionBar().hide();
         }
 
-        Intent intent = getIntent();
-        if (intent.getBooleanExtra(KEY_APP_IS_SHORTCUT, false)) {
-            Emulator.initializeForShortcutLaunch(this);
-        } else {
-            Emulator.setContext(this);
-        }
+        Emulator.setContext(this);
+        EmulatorCamera.setActivity(this);
 
         uid = intent.getLongExtra(KEY_APP_UID, -1);
 
@@ -229,7 +241,7 @@ public class EmulatorActivity extends AppCompatActivity {
         AlertDialog.Builder alertBuilder = new AlertDialog.Builder(this);
         alertBuilder.setTitle(R.string.confirmation_required)
                 .setMessage(R.string.force_close_confirmation)
-                .setPositiveButton(android.R.string.ok, (d, w) -> Process.killProcess(Process.myPid()))
+                .setPositiveButton(android.R.string.ok, (d, w) -> Emulator.exitInstance())
                 .setNegativeButton(android.R.string.cancel, null);
         alertBuilder.create().show();
     }
@@ -255,6 +267,12 @@ public class EmulatorActivity extends AppCompatActivity {
             handleVkOptions(id);
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        EmulatorCamera.handleOrientationChangeForAllInstances();
+        super.onConfigurationChanged(newConfig);
     }
 
     private void saveLog() {
@@ -395,6 +413,15 @@ public class EmulatorActivity extends AppCompatActivity {
         return androidToSymbian.get(keyCode, Integer.MAX_VALUE);
     }
 
+    private void onPermissionResult(Map<String, Boolean> status) {
+        permissionsLauncherDone.release();
+    }
+
+    public void requestPermissionsAndWait(String[] permissions) throws InterruptedException {
+        runOnUiThread(() -> permissionsLauncher.launch(permissions));
+        permissionsLauncherDone.acquire();
+    }
+
     private class ViewCallbacks implements View.OnTouchListener, SurfaceHolder.Callback, SurfaceHolder.Callback2, View.OnKeyListener {
         private final View view;
         private final FrameLayout rootView;
@@ -531,5 +558,4 @@ public class EmulatorActivity extends AppCompatActivity {
             Emulator.surfaceRedrawNeeded();
         }
     }
-
 }

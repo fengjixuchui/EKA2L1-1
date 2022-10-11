@@ -112,11 +112,13 @@ namespace eka2l1 {
             obj->destroy();                 \
     }                                       \
     container.clear();
+    
 
         // Delete one by one in order. Do not change the order
         OBJECT_CONTAINER_CLEANUP(sessions_);
         OBJECT_CONTAINER_CLEANUP(servers_);
         OBJECT_CONTAINER_CLEANUP(timers_);
+        OBJECT_CONTAINER_CLEANUP(condvars_);
         OBJECT_CONTAINER_CLEANUP(mutexes_);
         OBJECT_CONTAINER_CLEANUP(semas_);
         OBJECT_CONTAINER_CLEANUP(change_notifiers_);
@@ -124,6 +126,11 @@ namespace eka2l1 {
         OBJECT_CONTAINER_CLEANUP(prop_refs_);
         OBJECT_CONTAINER_CLEANUP(props_);
         OBJECT_CONTAINER_CLEANUP(chunks_);
+
+        for (std::size_t i = 0; i < msgs_.size(); i++) {
+            msgs_[i].reset();   
+        }
+
         OBJECT_CONTAINER_CLEANUP(threads_);
         OBJECT_CONTAINER_CLEANUP(processes_);
         OBJECT_CONTAINER_CLEANUP(libraries_);
@@ -483,6 +490,20 @@ namespace eka2l1 {
             if (global_data_chunk_) {
                 kernel_global_data *data = reinterpret_cast<kernel_global_data *>(global_data_chunk_->host_base());
                 data->reset();
+
+                if (is_eka1()) {
+                    // Fill default table info for EKA1
+                    data->char_set_.collation_data_set_ = global_data_chunk_->base(nullptr).ptr_address() + sizeof(kernel_global_data);
+                    kernel::collation_data_set *colset = reinterpret_cast<kernel::collation_data_set*>(reinterpret_cast<std::uint8_t*>(global_data_chunk_->host_base()) + sizeof(kernel_global_data));
+                    colset->collation_datas_ = data->char_set_.collation_data_set_ + sizeof(kernel::collation_data_set);
+                    colset->count_ = 1;
+
+                    kernel::collation_data *coldata = reinterpret_cast<kernel::collation_data*>(reinterpret_cast<std::uint8_t*>(global_data_chunk_->host_base()) + sizeof(kernel_global_data) + sizeof(kernel::collation_data_set));
+                    coldata->id_ = 0;
+                    coldata->main_table_ = 0;
+                    coldata->override_table_ = 0;
+                    coldata->flags_ = 0;
+                }
             }
         }
 
@@ -737,6 +758,7 @@ namespace eka2l1 {
 
             OBJECT_SEARCH(mutex, mutexes_)
             OBJECT_SEARCH(sema, semas_)
+            OBJECT_SEARCH(condvar, condvars_)
             OBJECT_SEARCH(chunk, chunks_)
             OBJECT_SEARCH(thread, threads_)
             OBJECT_SEARCH(process, processes_)
@@ -822,7 +844,7 @@ namespace eka2l1 {
             if (stack_size == 0) {
                 new_stack_size = imgs.second->header.stack_size;
             } else {
-                new_stack_size = std::min<std::uint32_t>(imgs.second->header.stack_size, stack_size);
+                new_stack_size = std::max<std::uint32_t>(imgs.second->header.stack_size, stack_size);
             }
 
             pri = static_cast<kernel::process_priority>(imgs.second->header.priority);
@@ -1138,6 +1160,7 @@ namespace eka2l1 {
 
             OBJECT_SEARCH(mutex, mutexes_)
             OBJECT_SEARCH(sema, semas_)
+            OBJECT_SEARCH(condvar, condvars_)
             OBJECT_SEARCH(chunk, chunks_)
             OBJECT_SEARCH(thread, threads_)
             OBJECT_SEARCH(process, processes_)
@@ -1176,6 +1199,7 @@ namespace eka2l1 {
     }
             GET_OBJECT(mutex, mutexes_)
             GET_OBJECT(sema, semas_)
+            GET_OBJECT(condvar, condvars_)
             GET_OBJECT(chunk, chunks_)
             GET_OBJECT(thread, threads_)
             GET_OBJECT(process, processes_)

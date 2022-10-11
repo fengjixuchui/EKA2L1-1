@@ -32,6 +32,9 @@
 #include <netinet/ip.h>
 #endif
 
+#include <utils/des.h>
+#include <utils/err.h>
+
 namespace eka2l1::epoc::internet {
     inet_host_resolver::inet_host_resolver(inet_bridged_protocol *papa, const std::uint32_t address_family, const std::uint32_t protocol_id)
         : papa_(papa)
@@ -56,48 +59,81 @@ namespace eka2l1::epoc::internet {
         return true;
     }
 
-    static void addrinfo_to_name_entry(epoc::socket::name_entry &supply_and_result, addrinfo *result_info) {
-        if (result_info->ai_family == AF_INET6) {
-            supply_and_result.addr_.family_ = INET6_ADDRESS_FAMILY;
+    static void host_sockaddr_v4_to_guest_saddress(const sockaddr *addr, epoc::socket::saddress &dest_addr, std::uint32_t *data_len = nullptr, const bool for_des = false) {
+        const sockaddr_in *in = reinterpret_cast<const sockaddr_in*>(addr);
+        dest_addr.family_ = INET_ADDRESS_FAMILY;
 
-            sockaddr_in6 *in6 = reinterpret_cast<sockaddr_in6*>(result_info->ai_addr);
-            supply_and_result.addr_.port_ = ntohs(in6->sin6_port);
+        sinet_address &in_guest = static_cast<sinet_address&>(dest_addr);
 
-            sinet6_address &in6_guest = static_cast<sinet6_address&>(supply_and_result.addr_);
-            std::memcpy(in6_guest.address_32x4(), &in6->sin6_addr, 16);
+        std::memcpy(in_guest.addr_long(), &in->sin_addr, 4);
+        in_guest.port_ = ntohs(in->sin_port);
 
-            *in6_guest.flow() = in6->sin6_flowinfo;
-            *in6_guest.scope() = in6->sin6_scope_id;
-        } else {
-            supply_and_result.addr_.family_ = INET_ADDRESS_FAMILY;
+        if (data_len) {
+            if (for_des) {
+                epoc::set_descriptor_length_variable(*data_len, sinet_address::DATA_SIZE);
+            } else {
+                *data_len = sinet_address::DATA_SIZE;
+            }
+        }
+    }
+    
+    static void host_sockaddr_v6_to_guest_saddress(const sockaddr *addr, epoc::socket::saddress &dest_addr, std::uint32_t *data_len = nullptr, const bool for_des = false) {
+        dest_addr.family_ = INET6_ADDRESS_FAMILY;
 
-            sinet_address &in4_guest = static_cast<sinet_address&>(supply_and_result.addr_);
-            sockaddr_in *in = reinterpret_cast<sockaddr_in*>(result_info->ai_addr);
+        const sockaddr_in6 *in6 = reinterpret_cast<const sockaddr_in6*>(addr);
+        dest_addr.port_ = ntohs(in6->sin6_port);
 
-            std::memcpy(in4_guest.addr_long(), &in->sin_addr, 4);
-            in4_guest.port_ = ntohs(in->sin_port);
+        sinet6_address &in6_guest = static_cast<sinet6_address&>(dest_addr);
+        std::memcpy(in6_guest.address_32x4(), &in6->sin6_addr, 16);
+
+        *in6_guest.flow() = in6->sin6_flowinfo;
+        *in6_guest.scope() = in6->sin6_scope_id;
+
+        if (data_len) {
+            if (for_des) {
+                epoc::set_descriptor_length_variable(*data_len, sinet6_address::DATA_SIZE);
+            } else {
+                *data_len = sinet6_address::DATA_SIZE;
+            }
         }
     }
 
-    bool inet_host_resolver::next(epoc::socket::name_entry &result) {
+    void host_sockaddr_to_guest_saddress(const sockaddr *addr, epoc::socket::saddress &dest_addr, std::uint32_t *data_len, const bool for_des) {
+        if (addr->sa_family == AF_INET6) {
+            host_sockaddr_v6_to_guest_saddress(addr, dest_addr, data_len, for_des);
+        } else {
+            host_sockaddr_v4_to_guest_saddress(addr, dest_addr, data_len, for_des);
+        }
+    }
+
+    void addrinfo_to_name_entry(epoc::socket::name_entry &supply_and_result, addrinfo *result_info) {
+        if (result_info->ai_family == AF_INET6) {
+            host_sockaddr_v6_to_guest_saddress(result_info->ai_addr, supply_and_result.addr_);
+        } else {
+            host_sockaddr_v4_to_guest_saddress(result_info->ai_addr, supply_and_result.addr_);
+        }
+    }
+
+    void inet_host_resolver::next(epoc::socket::name_entry *result, epoc::notify_info &complete_info) {
         if (!iterating_info_) {
-            return false;
+            complete_info.complete(epoc::error_eof);
+            return;
         }
 
-        addrinfo_to_name_entry(result, iterating_info_);
+        addrinfo_to_name_entry(*result, iterating_info_);
         iterating_info_ = iterating_info_->ai_next;
 
-        return true;
+        complete_info.complete(epoc::error_none);
     }
 
-    bool inet_host_resolver::get_by_address(epoc::socket::saddress &addr, epoc::socket::name_entry &result) {
+    void inet_host_resolver::get_by_address(epoc::socket::saddress &addr, epoc::socket::name_entry *result, epoc::notify_info &complete_info) {
         LOG_WARN(SERVICE_INTERNET, "Get host by address stubbed to not found");
-        return false;
+        complete_info.complete(epoc::error_not_supported);
     }
 
-    bool inet_host_resolver::get_by_name(epoc::socket::name_entry &supply_and_result) {
-        const std::string name_utf8 = common::ucs2_to_utf8(supply_and_result.name_.to_std_string(nullptr));
-        
+    void inet_host_resolver::get_by_name(epoc::socket::name_entry *supply_and_result, epoc::notify_info &complete_info) {
+        const std::string name_utf8 = common::ucs2_to_utf8(supply_and_result->name_.to_std_string(nullptr));
+    
         if (prev_info_) {
             freeaddrinfo(prev_info_);
         }
@@ -115,19 +151,19 @@ namespace eka2l1::epoc::internet {
 
         if (result_code != 0) {
             LOG_ERROR(SERVICE_INTERNET, "Get address by name failed with code {}", result_code);
-            return false;
+            complete_info.complete(epoc::error_general);
         }
 
         if (!result_info || !result_info->ai_addr) {
             LOG_ERROR(SERVICE_INTERNET, "Address retrieve is not fullfilled!");
-            return false;
+            complete_info.complete(epoc::error_not_found);
         }
 
-        addrinfo_to_name_entry(supply_and_result, result_info);
+        addrinfo_to_name_entry(*supply_and_result, result_info);
 
         prev_info_ = result_info;
         iterating_info_ = result_info->ai_next;
 
-        return true;
+        complete_info.complete(epoc::error_none);
     }
 }

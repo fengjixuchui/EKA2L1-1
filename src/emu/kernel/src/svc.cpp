@@ -1618,7 +1618,7 @@ namespace eka2l1::epoc {
             return epoc::error_bad_handle;
         }
 
-        mut->wait();
+        mut->wait(kern->crr_thread());
         return epoc::error_none;
     }
 
@@ -1630,13 +1630,13 @@ namespace eka2l1::epoc {
         }
 
         if (timeout == 0) {
-            mut->wait();
+            mut->wait(kern->crr_thread());
             return epoc::error_none;
         }
 
         if (timeout == -1) {
             // Try lock
-            mut->try_wait();
+            mut->try_wait(kern->crr_thread());
             return epoc::error_none;
         }
 
@@ -1689,6 +1689,53 @@ namespace eka2l1::epoc {
         }
 
         return mut->count();
+    }
+    
+    BRIDGE_FUNC(std::int32_t, condvar_create, eka2l1::ptr<desc8> mutex_name_des, epoc::owner_type owner) {
+        process_ptr pr = kern->crr_process();
+
+        desc8 *desname = mutex_name_des.get(pr);
+        kernel::owner_type owner_kern = (owner == epoc::owner_process) ? kernel::owner_type::process : kernel::owner_type::thread;
+
+        const kernel::handle cv = kern->create_and_add<kernel::condvar>(owner_kern, kern->get_ntimer(), pr,
+                                           !desname ? "" : desname->to_std_string(pr),
+                                           !desname ? kernel::access_type::local_access : kernel::access_type::global_access)
+                                       .first;
+
+        if (cv == kernel::INVALID_HANDLE) {
+            return epoc::error_general;
+        }
+
+        return cv;
+    }
+
+    BRIDGE_FUNC(std::int32_t, condvar_wait, kernel::handle condvar_h, kernel::handle mutex_h, std::int32_t timeout) {
+        kernel::condvar *cv = kern->get<kernel::condvar>(condvar_h);
+        kernel::mutex *mut = kern->get<kernel::mutex>(mutex_h);
+
+        if (!cv || !mut) {
+            return epoc::error_bad_handle;
+        }
+
+        return (cv->wait(kern->crr_thread(), mut, timeout) ? epoc::error_none : epoc::error_general);
+    }
+    
+    BRIDGE_FUNC(void, condvar_signal, kernel::handle condvar_h) {
+        kernel::condvar *cv = kern->get<kernel::condvar>(condvar_h);
+        if (cv) {
+            cv->signal();
+        } else {
+            LOG_ERROR(KERNEL, "Condition variable is null (handle={})", condvar_h);
+        }
+    }
+    
+    BRIDGE_FUNC(void, condvar_broadcast, kernel::handle condvar_h) {
+        kernel::condvar *cv = kern->get<kernel::condvar>(condvar_h);
+        if (cv) {
+            cv->broadcast();
+        } else {
+            LOG_ERROR(KERNEL, "Condition variable is null (handle={})", condvar_h);
+        }
     }
 
     BRIDGE_FUNC(void, wait_for_any_request) {
@@ -3797,6 +3844,25 @@ namespace eka2l1::epoc {
         return result;
     }
 
+    std::int32_t chunk_adjust_double_ended_eka1(kernel_system *kern, const std::uint32_t attribute, epoc::eka1_executor *create_info,
+        epoc::request_status *finish_signal, kernel::thread *target_thread) {
+        kernel::chunk *chunk = kern->get<kernel::chunk>(create_info->arg0_);
+
+        if (!chunk) {
+            finish_status_request_eka1(target_thread, finish_signal, epoc::error_bad_handle);
+            return epoc::error_bad_handle;
+        }
+
+        std::int32_t result = epoc::error_none;
+
+        if (!chunk->adjust_de(create_info->arg1_, create_info->arg2_)) {
+            result = epoc::error_no_memory;
+        }
+
+        finish_status_request_eka1(target_thread, finish_signal, result);
+        return result;
+    }
+
     std::int32_t thread_panic_eka1(kernel_system *kern, const std::uint32_t attribute, epoc::eka1_executor *create_info,
         epoc::request_status *finish_signal, kernel::thread *target_thread) {
         kernel::thread *thr = kern->get<kernel::thread>(create_info->arg0_);
@@ -4625,6 +4691,9 @@ namespace eka2l1::epoc {
             case epoc::eka1_executor::execute_v6_chunk_adjust:
                 return chunk_adjust_eka1(kern, attribute, create_info, finish_signal, crr_thread);
 
+            case epoc::eka1_executor::execute_v6_adjust_chunk_double_ended:
+                return chunk_adjust_double_ended_eka1(kern, attribute, create_info, finish_signal, crr_thread);
+
             case epoc::eka1_executor::execute_v6_create_mutex:
                 return mutex_create_eka1(kern, attribute, create_info, finish_signal, crr_thread);
 
@@ -4895,6 +4964,9 @@ namespace eka2l1::epoc {
 
             case epoc::eka1_executor::execute_v80_msgqueue_cancel_data_available:
                 return msgqueue_cancel_data_available_eka1(kern, attribute, create_info, finish_signal, crr_thread);
+
+            case epoc::eka1_executor::execute_v80_create_change_notifier:
+                return change_notifier_create_eka1(kern, attribute, create_info, finish_signal, crr_thread);
 
             default:
                 LOG_ERROR(KERNEL, "Unimplemented object executor for function 0x{:X}", attribute & 0xFF);
@@ -5345,8 +5417,8 @@ namespace eka2l1::epoc {
         std::basic_string<T> to_find_str(str, length);
 
         // Regex power. Find this for me...
-        to_find_str = std::string(1, static_cast<T>('(')) + to_find_str;
-        to_find_str += std::string(1, static_cast<T>(')'));
+        to_find_str = std::basic_string<T>(1, static_cast<T>('(')) + to_find_str;
+        to_find_str += std::basic_string<T>(1, static_cast<T>(')'));
 
         const std::size_t pos = common::match_wildcard_in_string(cvt_func(source_str), cvt_func(to_find_str), is_fold);
 
@@ -5359,6 +5431,10 @@ namespace eka2l1::epoc {
 
     BRIDGE_FUNC(std::int32_t, desc8_find, epoc::desc8 *dd, const char *str, const std::int32_t length, const bool is_fold) {
         return desc_find(kern, common::utf8_to_wstr, dd, str, length, is_fold);
+    }
+
+    BRIDGE_FUNC(std::int32_t, desc16_find, epoc::desc16 *dd, const char16_t *str, const std::int32_t length, const bool is_fold) {
+        return desc_find(kern, common::ucs2_to_wstr, dd, str, length, is_fold);
     }
 
     BRIDGE_FUNC(std::uint32_t, user_language) {
@@ -5507,6 +5583,7 @@ namespace eka2l1::epoc {
         BRIDGE_REGISTER(0x00C10000, hle_dispatch),
         BRIDGE_REGISTER(0x00C10001, hle_dispatch_2),
         /* SLOW EXECUTIVE CALL */
+        BRIDGE_REGISTER(0x00, object_next),
         BRIDGE_REGISTER(0x01, chunk_base),
         BRIDGE_REGISTER(0x02, chunk_size),
         BRIDGE_REGISTER(0x03, chunk_max_size),
@@ -5515,7 +5592,7 @@ namespace eka2l1::epoc {
         BRIDGE_REGISTER(0x0C, imb_range),
         BRIDGE_REGISTER(0x0E, library_lookup),
         BRIDGE_REGISTER(0x0F, library_filename),
-        BRIDGE_REGISTER(0x11, mutex_wait),
+        BRIDGE_REGISTER(0x11, mutex_wait_ver2),
         BRIDGE_REGISTER(0x12, mutex_signal),
         BRIDGE_REGISTER(0x13, process_id),
         BRIDGE_REGISTER(0x14, dll_filename),
@@ -5630,6 +5707,10 @@ namespace eka2l1::epoc {
         BRIDGE_REGISTER(0xC9, property_find_set_bin),
         BRIDGE_REGISTER(0xD2, process_get_data_parameter),
         BRIDGE_REGISTER(0xD3, process_data_parameter_length),
+        BRIDGE_REGISTER(0xD8, condvar_create),
+        BRIDGE_REGISTER(0xD9, condvar_wait),
+        BRIDGE_REGISTER(0xDA, condvar_signal),
+        BRIDGE_REGISTER(0xDB, condvar_broadcast),
         BRIDGE_REGISTER(0xDC, plat_sec_diagnostic),
         BRIDGE_REGISTER(0xDD, exception_descriptor),
         BRIDGE_REGISTER(0xDE, thread_request_signal),
@@ -6030,6 +6111,7 @@ namespace eka2l1::epoc {
         BRIDGE_REGISTER(0x800054, des8_match),
         BRIDGE_REGISTER(0x800055, des16_match),
         BRIDGE_REGISTER(0x800056, desc8_find),
+        BRIDGE_REGISTER(0x800057, desc16_find),
         BRIDGE_REGISTER(0x800058, des8_locate_fold),
         BRIDGE_REGISTER(0x800059, des16_locate_fold),
         BRIDGE_REGISTER(0x80005A, handle_name_eka1),
@@ -6141,6 +6223,7 @@ namespace eka2l1::epoc {
         BRIDGE_REGISTER(0x800054, des8_match),
         BRIDGE_REGISTER(0x800055, des16_match),
         BRIDGE_REGISTER(0x800056, desc8_find),
+        BRIDGE_REGISTER(0x800057, desc16_find),
         BRIDGE_REGISTER(0x800058, des8_locate_fold),
         BRIDGE_REGISTER(0x800059, des16_locate_fold),
         BRIDGE_REGISTER(0x80005A, handle_name_eka1),
@@ -6260,6 +6343,7 @@ namespace eka2l1::epoc {
         BRIDGE_REGISTER(0x800054, des8_match),
         BRIDGE_REGISTER(0x800055, des16_match),
         BRIDGE_REGISTER(0x800056, desc8_find),
+        BRIDGE_REGISTER(0x800057, desc16_find),
         BRIDGE_REGISTER(0x800058, des8_locate_fold),
         BRIDGE_REGISTER(0x800059, des16_locate_fold),
         BRIDGE_REGISTER(0x80005A, handle_name_eka1),

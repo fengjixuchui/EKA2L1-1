@@ -723,7 +723,8 @@ namespace eka2l1::drivers {
             }
         }
 
-        glScissor(clip_rect.top.x, ((clip_rect.size.y < 0) ? clip_rect.top.y : (current_fb_height - (clip_rect.top.y + clip_rect.size.y))), clip_rect.size.x, common::abs(clip_rect.size.y));
+        glScissor(clip_rect.top.x, ((clip_rect.size.y < 0) ? clip_rect.top.y : (current_fb_height - (clip_rect.top.y + clip_rect.size.y))), clip_rect.size.x,
+            common::max<int>(0, static_cast<int>(common::abs(clip_rect.size.y))));
     }
 
     void ogl_graphics_driver::clip_region(command &cmd) {
@@ -856,6 +857,8 @@ namespace eka2l1::drivers {
     }
 
     void ogl_graphics_driver::set_viewport(const eka2l1::rect &viewport) {
+        shared_graphics_driver::set_viewport(viewport);
+
         glViewport(viewport.top.x, ((viewport.size.y < 0) ? viewport.top.y : (current_fb_height - (viewport.top.y + viewport.size.y))), viewport.size.x, common::abs(viewport.size.y));
     }
 

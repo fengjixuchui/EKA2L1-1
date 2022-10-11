@@ -126,33 +126,47 @@ QString get_emulator_window_title() {
     QString window_title = QObject::tr("EKA2L1 - Symbian OS emulator");
 
     if (!settings.value(STATIC_TITLE_SETTING_NAME, false).toBool()) {
-        window_title = "EKA2L1 (" GIT_BRANCH " " GIT_COMMIT_HASH ")";
-
-        static constexpr const char *random_references[] = {
-            "Get ready, ready to set you off!",
-            "A demon lady with a bread in her mouth, shining in the sun",
-            "The story of pirates never ends",
-            "Uchiha with his brother go to clothes shop in prepare of his real estate job",
-            "Living inside the sewer as a clown",
-            "Me and the boys discovering this emulator and a bunch of Russians opening another dimension",
-            "Having a cyborg as my wife doing dishes and writing the emulator brb",
-            "Causing an entire country chaos because of my imagination",
-            "Thank you very much for checking out the emulator",
-            "Casually the cause of case files over two decades while staying first-grade",
-            "Stop right there criminal scum!",
-            "By Azura By Azura By Azura!",
-            "VAC is activating... It's Virtual Assistant Cellphone though, so keep using cheats!",
-            "Driftin' to save my sister in nowhere!",
-            "Will this become an Inferno Arch core soon?",
-            "Emulator from nowhere. Now on Netflix.",
-            "E3 2005 Prototype version."
-            // You can add more, but probably when the emulator becomes more functional
-        };
-
-        constexpr const int random_references_count = sizeof(random_references) / sizeof(const char *);
-
-        window_title += QString(" - ") + random_references[eka2l1::random_range(0, random_references_count - 1)];
+        window_title = "EKA2L1 " CURRENT_EKA2L1_VERSION_STRING " (" GIT_BRANCH " " GIT_COMMIT_HASH ") - Symbian OS emulator";
     }
 
     return window_title;
+}
+
+QString epocver_to_symbian_readable_name(const epocver ver) {
+    switch (ver) {
+    case epocver::epocu6:
+        return QString("epocu6");
+
+    case epocver::epoc6:
+        return QString("S60v1");
+
+    case epocver::epoc80:
+        return QString("S60v2 - 8.0");
+
+    case epocver::epoc81a:
+        return QString("S60v2 - 8.1a");
+
+    case epocver::epoc81b:
+        return QString("S60v2 - 8.1b");
+
+    case epocver::epoc93fp1:
+        return QString("S60v3 FP1");
+
+    case epocver::epoc93fp2:
+        return QString("S60v3 FP2");
+
+    case epocver::epoc94:
+        return QString("S60v5");
+
+    case epocver::epoc95:
+        return QString("S^3");
+
+    case epocver::epoc10:
+        return QString("Belle");
+
+    default:
+        break;
+    }
+
+    return QString("Unknown");
 }

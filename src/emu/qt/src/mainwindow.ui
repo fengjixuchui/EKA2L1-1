@@ -61,7 +61,7 @@
      <x>0</x>
      <y>0</y>
      <width>900</width>
-     <height>20</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -74,12 +74,15 @@
      </property>
      <addaction name="action_package"/>
      <addaction name="action_device"/>
+     <addaction name="separator"/>
+     <addaction name="action_ngage_card_game"/>
+     <addaction name="action_jar"/>
     </widget>
     <widget class="QMenu" name="menu_mount_game_card_dump">
      <property name="title">
       <string>Mount game card dump</string>
      </property>
-      <addaction name="separator"/>
+     <addaction name="separator"/>
      <addaction name="action_mount_game_card_folder"/>
      <addaction name="action_mount_game_card_zip"/>
     </widget>
@@ -113,6 +116,7 @@
      <string>Help</string>
     </property>
     <addaction name="action_about"/>
+    <addaction name="action_check_for_update"/>
    </widget>
    <widget class="QMenu" name="menu_emulation">
     <property name="title">
@@ -121,10 +125,34 @@
     <addaction name="action_pause"/>
     <addaction name="action_restart"/>
     <addaction name="separator"/>
+    <addaction name="separator"/>
+    <addaction name="action_launch_process"/>
+   </widget>
+   <widget class="QMenu" name="menu_bluetooth">
+    <property name="title">
+     <string>Bluetooth</string>
+    </property>
+    <widget class="QMenu" name="menu_netplay">
+     <property name="title">
+      <string>Netplay</string>
+     </property>
+     <addaction name="action_netplay_configure"/>
+     <addaction name="action_mod_netplay_friends"/>
+    </widget>
+    <addaction name="menu_netplay"/>
+   </widget>
+   <widget class="QMenu" name="menu_control">
+    <property name="title">
+     <string>Control</string>
+    </property>
+    <addaction name="action_button_mapping_editor"/>
+    <addaction name="action_touch_mapping_editor"/>
    </widget>
    <addaction name="menu_file"/>
    <addaction name="menu_emulation"/>
    <addaction name="menu_view"/>
+   <addaction name="menu_control"/>
+   <addaction name="menu_bluetooth"/>
    <addaction name="menu_help"/>
   </widget>
   <widget class="QStatusBar" name="status_bar"/>
@@ -258,6 +286,46 @@
   <action name="action_refresh_app_list">
    <property name="text">
     <string>Refresh app list</string>
+   </property>
+  </action>
+  <action name="action_mod_netplay_friends">
+   <property name="text">
+    <string>Friends's IP addresses</string>
+   </property>
+  </action>
+  <action name="action_button_mapping_editor">
+   <property name="text">
+    <string>Button mapping editor</string>
+   </property>
+  </action>
+  <action name="action_touch_mapping_editor">
+   <property name="text">
+    <string>Touch mapping editor</string>
+   </property>
+  </action>
+  <action name="action_ngage_card_game">
+   <property name="text">
+    <string>N-Gage card game</string>
+   </property>
+  </action>
+  <action name="action_check_for_update">
+   <property name="text">
+    <string>Check for update</string>
+   </property>
+  </action>
+  <action name="action_launch_process">
+   <property name="text">
+    <string>Launch process</string>
+   </property>
+  </action>
+  <action name="action_jar">
+   <property name="text">
+    <string notr="true">JAR</string>
+   </property>
+  </action>
+  <action name="action_netplay_configure">
+   <property name="text">
+    <string>Configure</string>
    </property>
   </action>
  </widget>

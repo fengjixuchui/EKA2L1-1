@@ -19,6 +19,7 @@ add_library(drivers
         include/drivers/audio/backend/tinysoundfont/player_tsf.h
         include/drivers/audio/backend/dsp_shared.h
         include/drivers/audio/backend/player_shared.h
+        include/drivers/camera/camera_collection.h
         include/drivers/hwrm/backend/vibration_null.h
         include/drivers/hwrm/vibration.h
         include/drivers/graphics/buffer.h
@@ -56,6 +57,7 @@ add_library(drivers
         src/audio/backend/bae_platimpl.cpp
         src/audio/backend/dsp_shared.cpp
         src/audio/backend/player_shared.cpp
+        src/camera/camera_collection.cpp
         src/hwrm/backend/vibration_null.cpp
         src/hwrm/vibration.cpp
         src/input/common.cpp
@@ -93,7 +95,13 @@ if (NOT ANDROID)
         src/sdl2_scoping.h)
 else()
     target_sources(drivers PRIVATE
+        include/drivers/camera/backend/android/camera_android.h
+        include/drivers/camera/backend/android/camera_collection_android.h
         include/drivers/hwrm/backend/vibration_jdk.h
+        src/camera/backend/android/camera_android.cpp
+        src/camera/backend/android/camera_collection_android.cpp
+        src/camera/backend/android/emulator_camera_jni.cpp
+        src/camera/backend/android/emulator_camera_jni.h
         src/hwrm/backend/vibration_jdk.cpp
         src/sensor/backend/android/sensor_android.cpp
         src/sensor/backend/android/sensor_android.h)

@@ -25,6 +25,10 @@
 #include <cstdint>
 #include <functional>
 
+#define MAKE_SOCKET_GETOPT_ERROR(error) 0xFFFFFF00ULL - error
+#define IS_SOCKET_GETOPT_ERROR(error) error > 0xFFFFFF00ULL
+#define GET_SOCKET_GETOPT_ERROR(error) -static_cast<int64_t>(error - 0xFFFFFF00ULL)
+
 namespace eka2l1::epoc::socket {
     struct saddress;
 
@@ -109,6 +113,26 @@ namespace eka2l1::epoc::socket {
         virtual void connect(const saddress &addr, epoc::notify_info &info);
 
         /**
+         * @brief Get the local address of a bounded socket.
+         * 
+         * @param result            The local address on success.
+         * @param result_len        The actual length of the local address struct
+         * 
+         * @return std::int32_t     KErrNone on success.
+         */
+        virtual std::int32_t local_name(saddress &result, std::uint32_t &result_len);
+        
+        /**
+         * @brief Get the remote address of a bounded socket.
+         * 
+         * @param result            The remote address on success.
+         * @param result_len        The actual length of the remote address struct
+         * 
+         * @return std::int32_t     KErrNone on success.
+         */
+        virtual std::int32_t remote_name(saddress &result, std::uint32_t &result_len);
+
+        /**
          * @brief Send data to remote host, on a non-connected or connected socket.
          * 
          * If a socket is not connected, sockaddr must not be NULL and points to a valid buffer containg
@@ -133,18 +157,44 @@ namespace eka2l1::epoc::socket {
          * @param   data                    Data to be received from remote.
          * @param   data_size               Size of data to be read. For stream socket, to receive the data pack available only, use the flag SOCKET_FLAG_DONT_WAIT_FULL.
          * @param   sent_size               Optional arugment that on completion contains the amount of data read. Can be NULL.
-         * @param   sockaddr                The address to receive the data from. On a connected socket, this address will only be used if not NULL and the socket is stream.
+         * @param   sockaddr                The address that sends the data, filled when this request is done. On a connected socket, this address will only be used if not NULL and the socket is stream.
          * @param   flags                   Flags that specified how to process this packet.
          * @param   complete_info           A notify info that is signaled when the receive is done, can contain the error code.
          * @param   done_callback           Function that will be called when receive is done (asynchronously).
          */
-        virtual void receive(std::uint8_t *data, const std::uint32_t data_size, std::uint32_t *recv_size, const saddress *addr,
+        virtual void receive(std::uint8_t *data, const std::uint32_t data_size, std::uint32_t *recv_size, saddress *addr,
             const std::uint32_t flags, epoc::notify_info &complete_info, receive_done_callback done_callback = nullptr);
+
+        /**
+         * @brief Start a listen queue for incoming connnections.
+         * 
+         * @param backlog Size of the listening queue.
+         */
+        virtual std::int32_t listen(const std::uint32_t backlog);
+
+        /**
+         * @brief Accept a pending connection, or wait if there's none
+         * 
+         * @param pending_sock      Pointer to the socket object to be created.
+         * @param complete_info     Notify info signaled when accept process is done.
+         */
+        virtual void accept(std::unique_ptr<socket> *pending_sock, epoc::notify_info &complete_info);
+
+        virtual void shutdown(epoc::notify_info &complete_info, int reason);
 
         virtual void cancel_receive();
 
         virtual void cancel_send();
 
         virtual void cancel_connect();
+
+        virtual void cancel_accept();
+
+        void cancel_all() {
+            cancel_connect();
+            cancel_receive();
+            cancel_send();
+            cancel_accept();
+        }
     };
 }

@@ -844,6 +844,54 @@ namespace eka2l1 {
         get_app_for_document_impl(ctx, path.value());
     }
 
+    std::string applist_server::recognize_data_impl(common::ro_stream &stream) {
+        std::uint8_t magic4[4] = { 0, 0, 0, 0 };
+
+        stream.seek(0, common::seek_where::beg);
+        stream.read(magic4, 4);
+
+        // MP3
+        if ((magic4[0] == 0xFF) && ((magic4[1] == 0xFB) || (magic4[1] == 0xF3) || (magic4[1] == 0xF2))) {
+            return "audio/mpeg";
+        }
+
+        // MP3 ver2
+        if ((magic4[0] == 0x49) && (magic4[1] == 0x44) && (magic4[2] == 0x33)) {
+            return "audio/mpeg";
+        }
+
+        return "";
+    }
+
+    void applist_server::recognize_data_by_file_handle(service::ipc_context &ctx) {
+        session_ptr fs_target_session = ctx.sys->get_kernel_system()->get<service::session>(*(ctx.get_argument_value<std::int32_t>(1)));
+        const std::uint32_t fs_file_handle = *(ctx.get_argument_value<std::uint32_t>(2));
+        file *source_file = fsserv->get_file(fs_target_session->unique_id(), fs_file_handle);
+
+        if (!source_file) {
+            ctx.complete(epoc::error_argument);
+            return;
+        }
+
+        const std::uint64_t current_pos = source_file->tell();
+        ro_file_stream stream_read(source_file);
+
+        const std::string mime_res = recognize_data_impl(stream_read);
+        source_file->seek(current_pos, file_seek_mode::beg);
+
+        if (mime_res.empty()) {
+            LOG_WARN(SERVICE_APPLIST, "File MIME data is not recognizable (filename: {})!", common::ucs2_to_utf8(source_file->file_name()));
+            ctx.complete(epoc::error_not_supported);
+        }
+
+        data_recog_result result;
+        result.confidence_rating_ = 10;             // TODO: Fill with actual value
+        result.type_.type_name_.assign(nullptr, mime_res);
+
+        ctx.write_data_to_descriptor_argument<data_recog_result>(0, result);
+        ctx.complete(epoc::error_none);
+    }
+
     void applist_server::get_capability(service::ipc_context &ctx) {
         const epoc::uid app_uid = *ctx.get_argument_value<epoc::uid>(1);
         apa_app_registry *reg = get_registration(app_uid);
@@ -983,6 +1031,10 @@ namespace eka2l1 {
                 server<applist_server>()->get_app_for_document_by_file_handle(*ctx);
                 break;
 
+            case applist_request_recognize_data_passed_by_file_handle:
+                server<applist_server>()->recognize_data_by_file_handle(*ctx);
+                break;
+
             default:
                 LOG_ERROR(SERVICE_APPLIST, "Unimplemented applist opcode 0x{:X}", ctx->msg->function);
                 break;
@@ -1006,8 +1058,16 @@ namespace eka2l1 {
 
     static constexpr std::uint8_t ENVIRONMENT_SLOT_MAIN = 1;
 
-    bool applist_server::launch_app(const std::u16string &exe_path, const std::u16string &cmd, kernel::uid *thread_id, kernel::process *requester) {
-        process_ptr pr = kern->spawn_new_process(exe_path, (legacy_level() < APA_LEGACY_LEVEL_MORDEN) ? cmd : u"");
+    bool applist_server::launch_app(const std::u16string &exe_path, const std::u16string &cmd, kernel::uid *thread_id,
+                                    kernel::process *requester, std::function<void()> app_exit_callback) {
+        static constexpr std::size_t MINIMAL_LAUNCH_STACK_SIZE = 0x8000;
+
+        // Some S^3 app has very low stack size for some reason. So we replace the stack size if it's too low
+        // Note that on the actual source code, app is launched with possible stack override
+        // For reference: see variable KMinApplicationStackSize and this line at file:
+        // https://github.com/SymbianSource/oss.FCL.sf.mw.appsupport/blob/master/appfw/apparchitecture/apgrfx/apgstart.cpp#L164
+        process_ptr pr = kern->spawn_new_process(exe_path, (legacy_level() < APA_LEGACY_LEVEL_MORDEN) ? cmd : u"",
+            0, MINIMAL_LAUNCH_STACK_SIZE);
 
         if (!pr) {
             return false;
@@ -1023,16 +1083,21 @@ namespace eka2l1 {
             requester->add_child_process(pr);
         }
 
+        if (app_exit_callback) {
+            pr->logon([app_exit_callback](kernel::process *) { app_exit_callback(); });
+        }
+
         // Add it into our app running list
         return pr->run();
     }
 
-    bool applist_server::launch_app(apa_app_registry &registry, epoc::apa::command_line &parameter, kernel::uid *thread_id) {
+    bool applist_server::launch_app(apa_app_registry &registry, epoc::apa::command_line &parameter, kernel::uid *thread_id,
+                                    std::function<void()> app_exit_callback) {
         std::u16string executable_to_run;
         registry.get_launch_parameter(executable_to_run, parameter);
 
         std::u16string apacmddat = parameter.to_string(legacy_level() < APA_LEGACY_LEVEL_MORDEN);
-        return launch_app(executable_to_run, apacmddat, thread_id);
+        return launch_app(executable_to_run, apacmddat, thread_id, nullptr, app_exit_callback);
     }
 
     std::optional<apa_app_masked_icon_bitmap> applist_server::get_icon(apa_app_registry &registry, const std::int8_t index) {

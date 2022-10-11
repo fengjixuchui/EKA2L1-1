@@ -435,17 +435,12 @@ namespace eka2l1::kernel {
         exit_reason = reason;
         exit_category = category;
 
-        common::double_linked_queue_element *elem = thread_list.first();
-        common::double_linked_queue_element *end = thread_list.end();
-
-        do {
-            if (!elem) {
-                break;
+        while (!thread_list.empty()) {
+            kernel::thread *thr = E_LOFF(thread_list.first()->deque(), kernel::thread, process_thread_link);
+            if (thr->exit_type == kernel::entity_exit_type::pending) {
+                thr->kill(ext, u"Domino", reason);
             }
-
-            E_LOFF(elem, kernel::thread, process_thread_link)->kill(ext, u"Domino", reason);
-            elem = elem->next;
-        } while (elem != end);
+        }
 
         // Cleanup resources
         if (!kern->wipeout_in_progress()) {
@@ -529,10 +524,14 @@ namespace eka2l1::kernel {
 
         logon_requests.clear();
         rendezvous_requests.clear();
+
+        for (auto &req: logon_requests_emu) {
+            req(this);
+        }
     }
 
     void process::wait_dll_lock() {
-        dll_lock->wait();
+        dll_lock->wait(kern->crr_thread());
     }
 
     void process::signal_dll_lock(kernel::thread *callee) {
@@ -590,6 +589,14 @@ namespace eka2l1::kernel {
 
             parent_process_ = nullptr;
         }
+    }
+
+    std::size_t process::logon(process_logon_callback callback) {
+        return logon_requests_emu.add(callback);
+    }
+
+    void process::logon_cancel(const std::size_t handle) {
+        logon_requests_emu.remove(handle);
     }
 
     void process::reload_compat_setting() {

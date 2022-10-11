@@ -289,7 +289,7 @@ namespace eka2l1::dispatch {
             manager.audio_renderer_semaphore()->destroy();
         }
 
-        return epoc::error_none;
+        return (sys->get_symbian_version_use() <= epocver::eka2) ? 1 : epoc::error_none;
     }
 
     BRIDGE_FUNC_DISPATCHER(std::int32_t, eaudio_player_pause, eka2l1::ptr<void> handle) {
@@ -554,12 +554,12 @@ namespace eka2l1::dispatch {
         return epoc::error_none;
     }
 
-    // DSP streams
-    BRIDGE_FUNC_DISPATCHER(eka2l1::ptr<void>, eaudio_dsp_out_stream_create, void *) {
+    eka2l1::ptr<void> eaudio_dsp_stream_create_impl(system *sys, bool in_stream) {
         dispatch::dispatcher *dispatcher = sys->get_dispatcher();
         drivers::audio_driver *aud_driver = sys->get_audio_driver();
 
-        auto ll_stream = drivers::new_dsp_out_stream(aud_driver, drivers::dsp_stream_backend_ffmpeg);
+        auto ll_stream = in_stream ? drivers::new_dsp_in_stream(aud_driver, drivers::dsp_stream_backend_ffmpeg)
+            : drivers::new_dsp_out_stream(aud_driver, drivers::dsp_stream_backend_ffmpeg);
 
         if (!ll_stream) {
             LOG_ERROR(HLE_AUD, "Unable to create new DSP out stream!");
@@ -589,6 +589,15 @@ namespace eka2l1::dispatch {
             stream_new.get());
 
         return manager.add_object(stream_new);
+    }
+
+    // DSP streams
+    BRIDGE_FUNC_DISPATCHER(eka2l1::ptr<void>, eaudio_dsp_out_stream_create, void *) {
+        return eaudio_dsp_stream_create_impl(sys, false);
+    }
+
+    BRIDGE_FUNC_DISPATCHER(eka2l1::ptr<void>, eaudio_dsp_in_stream_create, void *) {
+        return eaudio_dsp_stream_create_impl(sys, true);
     }
 
     BRIDGE_FUNC_DISPATCHER(std::int32_t, eaudio_dsp_stream_destroy, eka2l1::ptr<void> handle) {

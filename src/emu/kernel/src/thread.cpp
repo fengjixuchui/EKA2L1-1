@@ -29,6 +29,7 @@
 #include <kernel/kernel.h>
 #include <kernel/mutex.h>
 #include <kernel/sema.h>
+#include <kernel/condvar.h>
 #include <kernel/thread.h>
 #include <mem/mem.h>
 #include <mem/ptr.h>
@@ -229,6 +230,15 @@ namespace eka2l1 {
             kern->unlock();
         }
 
+        thread_local_data::thread_local_data(const std::uint32_t uid)
+            : heap(0)
+            , scheduler(0)
+            , trap_handler(0)
+            , thread_id(uid)
+            , tls_heap_allocator(0) {
+            std::memset(tls_array_data, 0, sizeof(tls_array_data));
+        }
+
         thread::thread(kernel_system *kern, memory_system *mem, ntimer *timing, kernel::process *owner,
             kernel::access_type access,
             const std::string &name, const address epa, const size_t stack_size_,
@@ -329,18 +339,14 @@ namespace eka2l1 {
                 std::uint8_t *data = reinterpret_cast<std::uint8_t *>(local_data_chunk->host_base());
 
                 ldata = reinterpret_cast<thread_local_data *>(data);
-                new (ldata) thread_local_data();
-
-                ldata->heap = 0;
-                ldata->scheduler = 0;
-                ldata->trap_handler = 0;
-                ldata->thread_id = 0;
+                new (ldata) thread_local_data(static_cast<std::uint32_t>(unique_id()));
 
                 static constexpr std::uint32_t TLS_MSR_DATA_SIZE = 0x400;
 
                 // Initialize space
                 std::uint8_t *thread_free_modify_local_storage_ptr = data + sizeof(thread_local_data);
                 std::memset(thread_free_modify_local_storage_ptr, 0, TLS_MSR_DATA_SIZE);
+                std::memcpy(thread_free_modify_local_storage_ptr, ldata, NATIVE_THREAD_LOCAL_DATA_COPY_SIZE);
 
                 thread_free_modify_local_storage_vptr = local_data_chunk->base(owner).ptr_address() + sizeof(thread_local_data);
             }
@@ -598,6 +604,10 @@ namespace eka2l1 {
                     break;
                 }
 
+                case object_type::condvar:
+                    reinterpret_cast<condvar *>(wait_obj)->priority_change();
+                    break;
+
                 default:
                     break;
                 }
@@ -678,6 +688,11 @@ namespace eka2l1 {
                         break;
                     }
 
+                    case object_type::condvar: {
+                        res = reinterpret_cast<condvar *>(wait_obj)->suspend_thread(this);
+                        break;
+                    }
+
                     default:
                         break;
                     }
@@ -727,6 +742,11 @@ namespace eka2l1 {
 
                     case object_type::sema: {
                         res = reinterpret_cast<semaphore *>(wait_obj)->unsuspend_waiting_thread(this);
+                        break;
+                    }
+
+                    case object_type::condvar: {
+                        res = reinterpret_cast<condvar *>(wait_obj)->unsuspend_thread(this);
                         break;
                     }
 

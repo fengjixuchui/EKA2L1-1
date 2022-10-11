@@ -19,7 +19,7 @@ else()
     set(EXCLUSIVE_QT_COMPONENTS OpenGL)
 endif()
 
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets LinguistTools Svg ${EXCLUSIVE_QT_COMPONENTS} REQUIRED)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets LinguistTools Svg Network ${EXCLUSIVE_QT_COMPONENTS} REQUIRED)
 
 # Make list of TS files, and add them to resources. Credits from Yuzu CMakeLists
 set(TS_FOLDER translations)
@@ -48,12 +48,22 @@ if (WIN32)
 endif()
 
 set(PROJECT_SOURCES
+        include/qt/btnmap/aim.h
+        include/qt/btnmap/base.h
+        include/qt/btnmap/editor.h
+        include/qt/btnmap/editor_widget.h
+        include/qt/btnmap/executor.h
+        include/qt/btnmap/joystick.h
+        include/qt/btnmap/singletouch.h
         include/qt/aboutdialog.h
         include/qt/applistwidget.h
+        include/qt/btnetplay_friends_dialog.h
+        include/qt/btnet_dialog.h
         include/qt/cmdhandler.h
         include/qt/device_install_dialog.h
         include/qt/displaywidget.h
         include/qt/input_dialog_driver.h
+        include/qt/launch_process_dialog.h
         include/qt/mainwindow.h
         include/qt/package_manager_dialog.h
         include/qt/seh_handler.h
@@ -61,15 +71,30 @@ set(PROJECT_SOURCES
         include/qt/state.h
         include/qt/symbian_input_dialog.h
         include/qt/thread.h
+        include/qt/update_dialog.h
+        include/qt/update_notice_dialog.h
         include/qt/utils.h
+        src/btnmap/aim.cpp
+        src/btnmap/base.cpp
+        src/btnmap/editor.cpp
+        src/btnmap/editor_widget.cpp
+        src/btnmap/editor_widget.ui
+        src/btnmap/executor.cpp
+        src/btnmap/joystick.cpp
+        src/btnmap/singletouch.cpp
         src/aboutdialog.cpp
         src/aboutdialog.ui
         src/applistwidget.cpp
+        src/btnetplay_friends_dialog.cpp
+        src/btnet_dialog.cpp
+        src/btnet_dialog.ui
         src/cmdhandler.cpp
         src/device_install_dialog.cpp
         src/device_install_dialog.ui
         src/displaywidget.cpp
         src/input_dialog_driver.cpp
+        src/launch_process_dialog.cpp
+        src/launch_process_dialog.ui
         src/main.cpp
         src/mainwindow.cpp
         src/mainwindow.ui
@@ -82,7 +107,17 @@ set(PROJECT_SOURCES
         src/symbian_input_dialog.cpp
         src/symbian_input_dialog.ui
         src/thread.cpp
+        src/update_dialog.cpp
+        src/update_dialog.ui
+        src/update_notice_dialog.cpp
+        src/update_notice_dialog.ui
         src/utils.cpp
+        ${RESOURCE_FILES}
+)
+
+set(UPDATE_SOURCES
+        src/updater.cpp
+        src/updater.ui
         ${RESOURCE_FILES}
 )
 
@@ -91,6 +126,14 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
     )
+
+    if (WIN32)
+        qt_add_executable(updater
+            WIN32
+            MANUAL_FINALIZATION
+            ${UPDATE_SOURCES}
+        )
+    endif()
 else()
     if(ANDROID)
         add_library(eka2l1_qt SHARED
@@ -100,6 +143,12 @@ else()
         add_executable(eka2l1_qt
             ${PROJECT_SOURCES}
         )
+        if (WIN32)
+            add_executable(updater
+                WIN32
+                ${UPDATE_SOURCES}
+            )
+        endif()
     endif()
 endif()
 
@@ -107,8 +156,14 @@ target_include_directories(eka2l1_qt PUBLIC include)
 
 if (${QT_VERSION_MAJOR} EQUAL 6)
     target_include_directories(eka2l1_qt PRIVATE ${Qt6Gui_PRIVATE_INCLUDE_DIRS})
+    if (WIN32)
+        target_include_directories(updater PRIVATE ${Qt6Gui_PRIVATE_INCLUDE_DIRS})
+    endif()
 else()
     target_include_directories(eka2l1_qt PRIVATE ${Qt5Gui_PRIVATE_INCLUDE_DIRS})
+    if (WIN32)
+        target_include_directories(updater PRIVATE ${Qt5Gui_PRIVATE_INCLUDE_DIRS})
+    endif()
 endif()
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -122,6 +177,7 @@ endif()
 target_link_libraries(eka2l1_qt PRIVATE
     Qt${QT_VERSION_MAJOR}::Svg
     Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Network
     ${EXCLUSIVE_QT_LIBRARIES}
     common
     config
@@ -131,8 +187,9 @@ target_link_libraries(eka2l1_qt PRIVATE
     epockern
     epocpkg
     gdbstub
+    j2me
     yaml-cpp)
-
+	
 set_target_properties(eka2l1_qt PROPERTIES OUTPUT_NAME eka2l1_qt
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -140,7 +197,21 @@ set_target_properties(eka2l1_qt PROPERTIES OUTPUT_NAME eka2l1_qt
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
         RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin")
 
+if (WIN32)
+    target_link_libraries(updater PRIVATE
+        Qt${QT_VERSION_MAJOR}::Widgets
+        common)
+
+    set_target_properties(updater PROPERTIES OUTPUT_NAME updater
+            ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/updater"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/updater"
+            RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/updater"
+            RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/updater"
+            RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin/updater")
+endif()
+
 add_dependencies(eka2l1_qt
+    audiooutputrouting
     avkonfep
     ecam
     scdv
@@ -168,7 +239,9 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/defaultbank.hsb" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/defaultbank.sf2" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/config/compat/" "$<TARGET_FILE_DIR:eka2l1_qt>/compat/"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/external/SDL_GameControllerDB/gamecontrollerdb.txt" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/")
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/external/SDL_GameControllerDB/gamecontrollerdb.txt" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/qt/resources/" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
+        )
 
 if (EKA2L1_ENABLE_SCRIPTING_ABILITY)
         add_custom_command(
@@ -250,6 +323,9 @@ endif()
 
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(eka2l1_qt)
+    if (WIN32)
+        qt_finalize_executable(updater)
+    endif()
 endif()
 
 if (WIN32)
@@ -272,6 +348,18 @@ if (WIN32)
         TARGET eka2l1_qt
         POST_BUILD
         COMMAND "${WINDEPLOYQT_EXECUTABLE}" --no-compiler-runtime --no-opengl-sw --no-quick --plugindir "$<TARGET_FILE_DIR:eka2l1_qt>/qt/plugins" ${DEPLOY_BUILD_CONFIG_ARG} "$<TARGET_FILE:eka2l1_qt>")
+
+    set_property(TARGET updater PROPERTY WIN32_EXECUTABLE true)
+
+    add_custom_command(
+        TARGET updater
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/qt.conf.win" "$<TARGET_FILE_DIR:updater>/qt.conf")
+
+    add_custom_command(
+        TARGET updater
+        POST_BUILD
+        COMMAND "${WINDEPLOYQT_EXECUTABLE}" --no-compiler-runtime --no-opengl-sw --no-quick --plugindir "$<TARGET_FILE_DIR:updater>/qt/plugins" ${DEPLOY_BUILD_CONFIG_ARG} "$<TARGET_FILE:updater>")
 endif()
 
 # This code is taken and modified from RPCS3
@@ -285,4 +373,9 @@ if (UNIX AND NOT APPLE)
         TARGET eka2l1_qt
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/duck_tank.png" "$<TARGET_FILE_DIR:eka2l1_qt>/duck_tank.png")
+
+    add_custom_command(
+        TARGET eka2l1_qt
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/duck_tank_fedora.png" "$<TARGET_FILE_DIR:eka2l1_qt>/duck_tank_fedora.png")
 endif()

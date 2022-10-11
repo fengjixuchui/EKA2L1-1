@@ -68,7 +68,7 @@ namespace eka2l1 {
 
     epoc::socket::protocol *socket_server::find_protocol_by_name(const std::u16string &name) {
         for (auto &pr : protocols_) {
-            if (pr->name() == name) {
+            if (common::compare_ignore_case(pr->name(), name) == 0) {
                 return pr.get();
             }
         }
@@ -124,8 +124,16 @@ namespace eka2l1 {
                 so_create(ctx);
                 return;
 
+            case socket_old_so_create_null:
+                so_create_null(ctx);
+                return;
+
             case socket_old_hr_open:
                 hr_create(ctx, false);
+                return;
+
+            case socket_old_ndb_open:
+                ndb_create(ctx);
                 return;
 
             default:
@@ -169,6 +177,10 @@ namespace eka2l1 {
 
                 case socket_reform_ss_request_optimal_dealer:
                     ss_request_optimal_dealer(ctx);
+                    return;
+
+                case socket_reform_so_create_null:
+                    so_create_null(ctx);
                     return;
 
                 default:
@@ -252,8 +264,10 @@ namespace eka2l1 {
     }
 
     static void fill_protocol_description(epoc::socket::protocol *pr, protocol_description &des) {
-        //des.addr_fam_ = pr->family_id();
-       // des.protocol_ = pr->id();
+        // NOTE: On emulator some protocols are merged for feasable implementation
+        // TODO: Make them separable for this fill
+        des.addr_fam_ = pr->family_ids()[0];
+        des.protocol_ = pr->supported_ids()[0];
         des.ver_ = pr->ver();
         des.bord_ = pr->get_byte_order();
         //des.sock_type_ = pr->sock_type();
@@ -374,6 +388,45 @@ namespace eka2l1 {
         socket_subsession_instance so_inst = std::make_unique<epoc::socket::socket_socket>(this, sock_impl);
 
         const std::uint32_t id = static_cast<std::uint32_t>(subsessions_.add(so_inst));
+        subsessions_.get(id)->get()->set_id(id);
+
+        // Write the subsession handle
+        ctx->write_data_to_descriptor_argument<std::uint32_t>(3, id);
+        ctx->complete(epoc::error_none);
+    }
+
+    void socket_client_session::ndb_create(service::ipc_context *ctx) {
+        std::optional<std::uint32_t> addr_family = ctx->get_argument_value<std::uint32_t>(0);
+        std::optional<std::uint32_t> protocol = ctx->get_argument_value<std::uint32_t>(1);
+
+        if (!addr_family || !protocol) {
+            ctx->complete(epoc::error_argument);
+            return;
+        }
+
+        // Find the protocol that satifies our condition first
+        epoc::socket::protocol *target_pr = server<socket_server>()->find_protocol(addr_family.value(), protocol.value());
+        if (!target_pr) {
+            LOG_ERROR(SERVICE_ESOCK, "Unable to find Net Database protocol with address={}, protocol={}", addr_family.value(), protocol.value());
+            ctx->complete(epoc::error_not_found);
+
+            return;
+        }
+
+        // Try to instantiate the net database
+        std::unique_ptr<epoc::socket::net_database> netdb_impl = target_pr->make_net_database(addr_family.value(), protocol.value());
+        if (!netdb_impl) {
+            LOG_ERROR(SERVICE_ESOCK, "The protocol {} does not support net database!", common::ucs2_to_utf8(target_pr->name()));
+            ctx->complete(epoc::error_not_supported);
+
+            return;
+        }
+
+        // Create new session
+        socket_subsession_instance hr_inst = std::make_unique<epoc::socket::socket_net_database>(
+            this, netdb_impl);
+
+        const std::uint32_t id = static_cast<std::uint32_t>(subsessions_.add(hr_inst));
         subsessions_.get(id)->get()->set_id(id);
 
         // Write the subsession handle
