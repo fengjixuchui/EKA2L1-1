@@ -12,7 +12,6 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.os.Looper;
 import android.util.Log;
 import android.util.Size;
-import android.view.OrientationEventListener;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -29,10 +28,8 @@ import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 public class EmulatorCamera {
@@ -46,6 +43,7 @@ public class EmulatorCamera {
     private static final int FORMAT_DRIVER_RGB565 = 0x04;
     private static final int FORMAT_DRIVER_ARGB8888 = 0x08;
     private static final int FORMAT_DRIVER_JPEG = 0x10;
+    private static final int FORMAT_DRIVER_EXIF = 0x20;
     private static final int FORMAT_DRIVER_FBS_BMP_64K = 0x80;
     private static final int FORMAT_DRIVER_FBS_BMP_16M = 0x100;
     private static final int FORMAT_DRIVER_FBS_BMP_16MU = 0x10000;
@@ -208,7 +206,8 @@ public class EmulatorCamera {
 
     public static int[] getSupportedImageOutputFormats() {
         return new int[]{ FORMAT_DRIVER_ARGB8888, FORMAT_DRIVER_JPEG, FORMAT_DRIVER_RGB565,
-                FORMAT_DRIVER_FBS_BMP_64K, FORMAT_DRIVER_FBS_BMP_16M, FORMAT_DRIVER_FBS_BMP_16MU };
+                FORMAT_DRIVER_FBS_BMP_64K, FORMAT_DRIVER_FBS_BMP_16M, FORMAT_DRIVER_FBS_BMP_16MU,
+                FORMAT_DRIVER_EXIF };
     }
 
     /* END WRAPPER */
@@ -295,7 +294,8 @@ public class EmulatorCamera {
     private boolean isSupportedFormat(int requestedFormat) {
         return ((requestedFormat == FORMAT_DRIVER_ARGB8888) || (requestedFormat == FORMAT_DRIVER_RGB565) ||
                 (requestedFormat == FORMAT_DRIVER_JPEG) || (requestedFormat == FORMAT_DRIVER_FBS_BMP_64K) ||
-                (requestedFormat == FORMAT_DRIVER_FBS_BMP_16M) || (requestedFormat == FORMAT_DRIVER_FBS_BMP_16MU));
+                (requestedFormat == FORMAT_DRIVER_FBS_BMP_16M) || (requestedFormat == FORMAT_DRIVER_FBS_BMP_16MU) ||
+                (requestedFormat == FORMAT_DRIVER_EXIF));
     }
 
     public Size[] getOutputImageSizes() {
@@ -511,7 +511,7 @@ public class EmulatorCamera {
                                 ByteBuffer jpegBuffer = image.getPlanes()[0].getBuffer();
                                 int imageRot = image.getImageInfo().getRotationDegrees();
 
-                                if (requestedFormat == FORMAT_DRIVER_JPEG) {
+                                if ((requestedFormat == FORMAT_DRIVER_JPEG) || (requestedFormat == FORMAT_DRIVER_EXIF)) {
                                     // Throw immediately
                                     onCaptureImageDelivered(index, jpegBuffer.array(), 0);
                                 } else {
@@ -540,7 +540,7 @@ public class EmulatorCamera {
                                         decodedBitmap = BitmapFactory.decodeByteArray(dataBufferDecoded, 0,
                                                 dataBufferDecoded.length, opt);
                                     } catch (Exception ex) {
-                                        Log.i(TAG, "Decoding bitmap encountered exception: " + ex.toString());
+                                        Log.i(TAG, "Decoding bitmap encountered exception: " + ex);
                                     }
 
                                     if (imageRot != 0) {
