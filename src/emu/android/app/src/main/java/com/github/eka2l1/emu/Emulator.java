@@ -27,6 +27,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -86,6 +87,14 @@ public class Emulator {
     private static final int STORAGE_ERROR_NOT_FOUND = -2;
     private static final int STORAGE_ERROR_DISK_FULL = -3;
     private static final int STORAGE_ERROR_ALREADY_EXISTS = -4;
+
+    public static final int INSTALL_NG_GAME_ERROR_NONE = 0;
+    public static final int INSTALL_NG_GAME_ERROR_NO_GAME_DATA_FOLDER = 1;
+    public static final int INSTALL_NG_GAME_ERROR_MORE_THAN_ONE_DATA_FOLDER = 2;
+    public static final int INSTALL_NG_GAME_ERROR_NO_GAME_REGISTERATION_INFO = 3;
+    public static final int INSTALL_NG_GAME_ERROR_REGISTERATION_CORRUPTED = 4;
+    public static final int INSTALL_NG_GAME_ERROR_GENERAL = 5;
+
 
     private static final String[] columns = new String[] {
         DocumentsContract.Document.COLUMN_DISPLAY_NAME,
@@ -606,6 +615,20 @@ public class Emulator {
         }
     }
 
+    @SuppressLint("unused")
+    public static boolean openWebPage(String url) {
+        Uri webpage = Uri.parse(url);
+        Intent intent = new Intent(Intent.ACTION_VIEW, webpage);
+
+        try {
+            context.startActivity(intent);
+            return true;
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return false;
+        }
+    }
+
     public static boolean isInitialized() {
         return init;
     }
@@ -651,6 +674,8 @@ public class Emulator {
     public static native void uninstallPackage(int uid, int extIndex);
 
     public static native void mountSdCard(String path);
+
+    public static native int installNGageGame(String path);
 
     public static native void loadConfig();
 

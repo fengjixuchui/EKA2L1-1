@@ -64,6 +64,7 @@
 #include <services/uiss/uiss.h>
 #include <services/unipertar/unipertar.h>
 #include <services/window/window.h>
+#include <services/host_launch.h>
 
 #include <services/init.h>
 #include <system/epoc.h>
@@ -131,6 +132,7 @@ namespace eka2l1::epoc {
         locale.universal_time_offset_ = -14400;
         locale.device_time_state_ = epoc::device_user_time;
         locale.decimal_separator_ = '.';
+        locale.thousands_separator_ = ',';
         locale.negative_currency_format_ = epoc::negative_currency_leading_minus_sign;
 
         locale.time_separator_[0] = 0;
@@ -267,6 +269,7 @@ namespace eka2l1 {
             }
 
             epoc::initialize_system_properties(sys, cfg);
+            init_symbian_app_launch_to_host_launch(sys);
         }
         
         void init_services_post_bootup(system *sys) {

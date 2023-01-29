@@ -45,6 +45,7 @@
 
 #include <loader/mif.h>
 #include <loader/svgb.h>
+#include <loader/nvg.h>
 
 static QSize ICON_GRID_SIZE = QSize(64, 64);
 static QSize ICON_GRID_SPACING_SIZE = QSize(20, 20);
@@ -396,8 +397,10 @@ void applist_widget::reload_whole_list() {
 
     // This vector icon list is synced with
     QFuture<void> future;
-    
-    if (j2me_mode_btn_->isChecked()) {
+
+    const bool in_j2me = j2me_mode_btn_->isChecked();
+
+    if (in_j2me) {
         future = QtConcurrent::run([this]() {
             exit_mutex_.lock();
             scanning_ = true;
@@ -474,6 +477,16 @@ void applist_widget::reload_whole_list() {
         QCoreApplication::processEvents();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+
+    if (in_j2me) {
+        if (list_j2me_widget_->count() == 0) {
+            show_no_apps_avail();
+        }
+    } else {
+        if (list_widget_->count() == 0) {
+            show_no_apps_avail();
+        }
+    }
 }
 
 void applist_widget::show_no_apps_avail() {
@@ -548,17 +561,26 @@ void applist_widget::add_registeration_item_native(eka2l1::apa_app_registry &reg
         eka2l1::common::create_directories("cache");
 
         if (file_route) {
+            const std::uint64_t mif_last_modified = file_route->last_modify_since_0ad();
+            const std::string cached_path = fmt::format("cache/debinarized_{}.svg", eka2l1::common::pystr(app_name.toStdString()).strip_reserverd().strip().std_str());
+
+            std::unique_ptr<QSvgRenderer> renderer = nullptr;
+
+            if (eka2l1::common::exists(cached_path)) {
+                if (eka2l1::common::get_last_modifiy_since_ad(eka2l1::common::utf8_to_ucs2(cached_path)) >= mif_last_modified) {
+                    renderer = std::make_unique<QSvgRenderer>(QString::fromUtf8(cached_path.c_str()));
+                }
+            }
+
             eka2l1::ro_file_stream file_route_stream(file_route.get());
             eka2l1::loader::mif_file file_mif_parser(reinterpret_cast<eka2l1::common::ro_stream *>(&file_route_stream));
 
-            if (file_mif_parser.do_parse()) {
+            if (!renderer && file_mif_parser.do_parse()) {
                 std::vector<std::uint8_t> data;
                 int dest_size = 0;
                 if (file_mif_parser.read_mif_entry(0, nullptr, dest_size)) {
                     data.resize(dest_size);
                     file_mif_parser.read_mif_entry(0, data.data(), dest_size);
-
-                    const std::string cached_path = fmt::format("cache/debinarized_{}.svg", eka2l1::common::pystr(app_name.toStdString()).strip_reserverd().strip().std_str());
 
                     eka2l1::common::ro_buf_stream inside_stream(data.data(), data.size());
                     std::unique_ptr<eka2l1::common::wo_std_file_stream> outfile_stream = std::make_unique<eka2l1::common::wo_std_file_stream>(cached_path, true);
@@ -567,32 +589,42 @@ void applist_widget::add_registeration_item_native(eka2l1::apa_app_registry &reg
                     inside_stream.read(&header, sizeof(eka2l1::loader::mif_icon_header));
 
                     std::vector<eka2l1::loader::svgb_convert_error_description> errors;
+                    std::vector<eka2l1::loader::nvg_convert_error_description> errors_nvg;
 
                     if (header.type == eka2l1::loader::mif_icon_type_svg) {
-                        std::unique_ptr<QSvgRenderer> renderer = nullptr;
                         if (!eka2l1::loader::convert_svgb_to_svg(inside_stream, *outfile_stream, errors)) {
                             if (errors[0].reason_ == eka2l1::loader::svgb_convert_error_invalid_file) {
-                                QByteArray content(reinterpret_cast<const char *>(data.data()) + sizeof(eka2l1::loader::mif_icon_header), data.size() - sizeof(eka2l1::loader::mif_icon_header));
-                                renderer = std::make_unique<QSvgRenderer>(content);
+                                outfile_stream->write(reinterpret_cast<const char *>(data.data()) + sizeof(eka2l1::loader::mif_icon_header), data.size() - sizeof(eka2l1::loader::mif_icon_header));
                             }
-                        } else {
+                        }
+
+                        outfile_stream.reset();
+                        renderer = std::make_unique<QSvgRenderer>(QString::fromUtf8(cached_path.c_str()));
+                    } else {
+                        inside_stream = eka2l1::common::ro_buf_stream(data.data() + sizeof(eka2l1::loader::mif_icon_header),
+                            data.size() - sizeof(eka2l1::loader::mif_icon_header));
+
+                        if (eka2l1::loader::convert_nvg_to_svg(inside_stream, *outfile_stream, errors_nvg)) {
                             outfile_stream.reset();
                             renderer = std::make_unique<QSvgRenderer>(QString::fromUtf8(cached_path.c_str()));
-                        }
+                        } else  {
+                            LOG_ERROR(eka2l1::FRONTEND_UI, "Icon for app {} can't be decoded!", header.type, app_name.toStdString());
+                            outfile_stream.reset();
 
-                        if (renderer) {
-                            final_pixmap = QPixmap(ICON_GRID_SIZE);
-                            final_pixmap.fill(Qt::transparent);
-
-                            QPainter painter(&final_pixmap);
-                            renderer->render(&painter);
-
-                            icon_pair_rendered = true;
-                        }
-                    } else {
-                        LOG_ERROR(eka2l1::FRONTEND_UI, "Unknown icon type {} for app {}", header.type, app_name.toStdString());
+                            eka2l1::common::remove(cached_path);
+                        }  
                     }
                 }
+            }
+
+            if (renderer) {
+                final_pixmap = QPixmap(ICON_GRID_SIZE);
+                final_pixmap.fill(Qt::transparent);
+
+                QPainter painter(&final_pixmap);
+                renderer->render(&painter);
+
+                icon_pair_rendered = true;
             }
         }
     } else if (path_ext == u".mbm") {

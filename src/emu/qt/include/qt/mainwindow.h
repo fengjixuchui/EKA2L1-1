@@ -31,6 +31,7 @@
 #include <QPointer>
 #include <QProgressDialog>
 #include <memory>
+#include <map>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -111,6 +112,8 @@ private:
     editor_widget *editor_widget_;
     eka2l1::qt::btnmap::executor *map_executor_;
 
+    std::map<int, int> mouse_to_touch_index_emu_;
+
     void setup_screen_draw();
     void setup_app_list(const bool load_now = false);
     void setup_package_installer_ui_hooks();
@@ -169,6 +172,7 @@ private slots:
     void on_finished_text_input(const QString &text, const bool force_close);
     void on_input_dialog_open_request();
     void on_input_dialog_close_request();
+    void on_input_dialog_delay_launch_asked();
     void on_hide_system_apps_changed();
     void on_bt_netplay_mod_friends_clicked();
     void on_btnetplay_friends_dialog_finished(int status);
@@ -183,6 +187,7 @@ private slots:
     void on_launch_process_requested();
     void on_action_netplay_configure_triggered();
     void on_btnet_friends_dialog_requested_from_conf();
+    void on_action_stretch_to_fill_toggled(bool checked);
 
 signals:
     void progress_dialog_change(const std::size_t now, const std::size_t total);
@@ -193,7 +198,7 @@ signals:
     void restart_requested();
     void controller_button_press(eka2l1::drivers::input_event event);
     void screen_focus_group_changed();
-    void input_dialog_open_request();
+    void input_dialog_delay_launch_asked();
     void input_dialog_close_request();
     void install_ngage_game_name_available(QString name);
 
@@ -208,7 +213,8 @@ public:
 
     void setup_and_switch_to_game_mode();
     void draw_enabled_overlay(eka2l1::drivers::graphics_driver *driver,
-        eka2l1::drivers::graphics_command_builder &builder, const float scale_factor);
+        eka2l1::drivers::graphics_command_builder &builder, const float scale_factor_x,
+        const float scale_factor_y);
     void load_and_show();
 
     bool deliver_overlay_mouse_event(const eka2l1::vec3 &pos, const int button_id, const int action_id,
@@ -223,6 +229,8 @@ public:
 
     bool input_dialog_open(const std::u16string &inital_text, const int max_length, eka2l1::drivers::ui::input_dialog_complete_callback complete_callback);
     void input_dialog_close();
+
+    int map_mouse_id_to_touch_index(int mouse_id, const bool on_release);
 
 private:
     Ui::main_window *ui_;

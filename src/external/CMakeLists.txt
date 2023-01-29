@@ -1,10 +1,11 @@
 ﻿include(ExternalProject)
+include(CheckSymbolExists)
 
 add_library(miniz miniz/miniz.h miniz/miniz.c)
 target_include_directories(miniz PUBLIC miniz)
 
 # Force Boost directory for Dynarmic - we never use one
-set (BOOST_INCLUDEDIR "${CMAKE_CURRENT_SOURCE_DIR}/ext-boost/" CACHE PATH "Boost include directory")
+set (Boost_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ext-boost/" CACHE PATH "Boost include directory")
 if (ANDROID)
     add_definitions(-DBOOST_ERROR_CODE_HEADER_ONLY
             -DBOOST_SYSTEM_NO_LIB
@@ -14,7 +15,7 @@ if (ANDROID)
             )
     set (BOOST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/ext-boost/")
     add_library(boost INTERFACE)
-    target_include_directories(boost SYSTEM INTERFACE ${BOOST_INCLUDEDIR})
+    target_include_directories(boost SYSTEM INTERFACE ${Boost_INCLUDE_DIR})
 endif()
 
 # PugiXML
@@ -114,16 +115,13 @@ option (GLM_TEST_ENABLE "Enable glm tests" OFF)
 add_subdirectory(glm)
 
 # Dynarmic: disable tests
-option(DYNARMIC_TESTS "Enable dynarmic tests" ON)
-option(DYNARMIC_NO_BUNDLED_FMT "No bundled fmt for Dynarmic" ON)
+option(DYNARMIC_TESTS "Enable dynarmic tests" OFF)
 
 if (NOT ARCHITECTURE_ARM32)
     add_subdirectory(dynarmic)
 endif()
 
-if (ANDROID)
-    add_subdirectory(lunasvg)
-endif()
+add_subdirectory(lunasvg)
 
 option(YAML_CPP_BUILD_TESTS "Enable YAML cpp testing" OFF)
 add_subdirectory(yaml-cpp)
@@ -186,7 +184,12 @@ target_link_libraries(Vulkan INTERFACE ${Vulkan_LIBRARIES})
 # Cubeb
 option (BUILD_TOOLS "Build tools" OFF)
 option (BUILD_TESTS "Build cubeb tests" OFF)
+
+# Forcefully disable AAudio (we build with API target 21 minimum)
+set (USE_AAUDIO FALSE CACHE INTERNAL "" FORCE)
+
 add_subdirectory(cubeb)
+
 
 # FFMPEG
 add_subdirectory(ffmpeg)
@@ -275,6 +278,29 @@ option (UPNPC_BUILD_SAMPLE "Build sample executables" FALSE)
 option (UPNPC_NO_INSTALL "Disable installation" TRUE)
 
 add_subdirectory(miniupnp/miniupnpc)
+
+# libtess2
+
+add_library(libtess2
+    libtess2/Source/bucketalloc.c
+    libtess2/Source/bucketalloc.h
+    libtess2/Source/dict.c
+    libtess2/Source/dict.h
+    libtess2/Source/geom.c
+    libtess2/Source/geom.h
+    libtess2/Source/mesh.c
+    libtess2/Source/mesh.h
+    libtess2/Source/priorityq.c
+    libtess2/Source/priorityq.h
+    libtess2/Source/sweep.c
+    libtess2/Source/sweep.h
+    libtess2/Source/tess.c
+    libtess2/Source/tess.h)
+
+target_include_directories(libtess2 PUBLIC libtess2/Include)
+
+# RectangleBinPack
+add_subdirectory(RectangleBinPack)
 
 set (capstone_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/capstone/include" PARENT_SCOPE)
 set (YAML_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/yaml-cpp/include" PARENT_SCOPE)

@@ -106,6 +106,8 @@ namespace eka2l1 {
          *                                      this function will fill parameters that you don't yet know.
          */
         void get_launch_parameter(std::u16string &native_executable_path, epoc::apa::command_line &args);
+
+        bool supports_screen_mode(const int mode_num);
     };
 
     /**
@@ -114,13 +116,14 @@ namespace eka2l1 {
      * The function does not know the app UID. To know the UID yourself, check out UID3 field of
      * the app binary. App binary path is guranteed to be filled in the struct on success.
      * 
-     * \param stream      A read-only stream contains registeration info.
-     * \param reg         APA registry struct. This will be filled with info on success.
-     * \param land_drive  The drive contains this registeration.
+     * \param stream            A read-only stream contains registeration info.
+     * \param reg               APA registry struct. This will be filled with info on success.
+     * \param land_drive        The drive contains this registeration.
+     * \param app_path_oldarch  If true, native applications will have its app path pointed to system/programs instead of shorten path with drive only.
      * 
      * \returns True on success.
      */
-    bool read_registeration_info(common::ro_stream *stream, apa_app_registry &reg, const drive_number land_drive);
+    bool read_registeration_info(common::ro_stream *stream, apa_app_registry &reg, const drive_number land_drive, const bool app_path_oldarch);
 
     /**
      * \brief Read registeration info from AIF file.
@@ -171,9 +174,26 @@ namespace eka2l1 {
     const std::string get_app_list_server_name_by_epocver(const epocver ver);
 
     class applist_session : public service::typical_session {
+    private:
+        enum app_filter_method {
+            APP_FILTER_BY_EMBED,
+            APP_FILTER_BY_FLAGS,
+            APP_FILTER_NONE
+        };
+
+        std::size_t current_index_;
+        std::uint32_t flags_mask_;
+        std::uint32_t flags_match_value_;
+        std::uint32_t requested_screen_mode_;
+
+        app_filter_method filter_method_;
+
     public:
         explicit applist_session(service::typical_server *svr, kernel::uid client_ss_uid, epoc::version client_ver);
         void fetch(service::ipc_context *ctx);
+
+        void get_filtered_apps_by_flags(service::ipc_context &ctx);
+        void get_next_app(service::ipc_context &ctx);
     };
 
     /*! \brief Applist services
@@ -187,6 +207,7 @@ namespace eka2l1 {
         friend class applist_session;
 
         std::vector<apa_app_registry> regs;
+        std::unordered_map<epoc::uid, std::u16string> uids_app_to_executable;
 
         std::uint32_t flags{ 0 };
         std::uint32_t avail_drives_{ 0 };
@@ -283,13 +304,17 @@ namespace eka2l1 {
         void get_app_for_document(service::ipc_context &ctx);
         void get_app_for_document_by_file_handle(service::ipc_context &ctx);
         void get_app_for_document_impl(service::ipc_context &ctx, const std::u16string &path);
+        void get_app_executable_name_given_app_uid(service::ipc_context &ctx);
         void recognize_data_by_file_handle(service::ipc_context &ctx);
+        void get_supported_data_types_phase1(service::ipc_context &ctx);
+        void get_supported_data_types_phase2(service::ipc_context &ctx);
 
         void connect(service::ipc_context &ctx) override;
 
     protected:
         bool launch_app(const std::u16string &exe_path, const std::u16string &cmd, kernel::uid *thread_id,
-            kernel::process *requester = nullptr, std::function<void()> app_exit_callback = nullptr);
+            kernel::process *requester = nullptr, const epoc::uid known_uid = 0,
+            std::function<void()> app_exit_callback = nullptr);
 
     public:
         explicit applist_server(system *sys);
@@ -321,5 +346,7 @@ namespace eka2l1 {
          * \brief Get all app registerations.
          */
         std::vector<apa_app_registry> &get_registerations();
+
+        void add_app_uid_to_host_launch_name(const epoc::uid app_uid, const std::u16string &host_launch_name);
     };
 }

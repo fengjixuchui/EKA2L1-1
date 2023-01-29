@@ -92,6 +92,7 @@ namespace eka2l1 {
     };
 
     using vec2d = vecx<double, 2>;
+    using vec2f = vecx<float, 2>;
 
     /*! \brief A 2D Vector */
     struct vec2 {
@@ -131,9 +132,17 @@ namespace eka2l1 {
         vec2 operator /(const float rhs) const {
             return vec2(static_cast<int>(x / rhs), static_cast<int>(y / rhs));
         }
+
+        vec2 operator /(const vec2f &rhs) const {
+            return vec2(static_cast<int>(x / rhs[0]), static_cast<int>(y / rhs[1]));
+        }
         
         vec2 operator*(const float rhs) const {
             return vec2(static_cast<int>(x * rhs), static_cast<int>(y * rhs));
+        }
+
+        vec2 operator*(const vec2f &rhs) const {
+            return vec2(static_cast<int>(x * rhs[0]), static_cast<int>(y * rhs[1]));
         }
 
         bool operator==(const vec2 &rhs) const {
@@ -175,6 +184,11 @@ namespace eka2l1 {
             y = static_cast<int>(y * rhs);
         }
 
+        void operator*=(const vec2f rhs) {
+            x = static_cast<int>(x * rhs[0]);
+            y = static_cast<int>(y * rhs[1]);
+        }
+
         void operator=(const vec2 &rhs) {
             x = rhs.x;
             y = rhs.y;
@@ -213,6 +227,16 @@ namespace eka2l1 {
 
         vec3 operator*(const int rhs) const {
             return vec3(x * rhs, y * rhs, z * rhs);
+        }
+
+        vec3 operator*(const float rhs) const {
+            return vec3(static_cast<int>(x * rhs), static_cast<int>(y * rhs), static_cast<int>(z * rhs));
+        }
+
+        void operator*=(const float rhs) {
+            x = static_cast<int>(x * rhs);
+            y = static_cast<int>(y * rhs);
+            z = static_cast<int>(z * rhs);
         }
     };
 
@@ -295,6 +319,11 @@ namespace eka2l1 {
         }
 
         void scale(const float factor) {
+            size *= factor;
+            top *= factor;
+        }
+
+        void scale(const eka2l1::vec2f &factor) {
             size *= factor;
             top *= factor;
         }

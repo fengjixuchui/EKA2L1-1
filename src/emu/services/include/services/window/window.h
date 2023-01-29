@@ -190,6 +190,7 @@ namespace eka2l1::epoc {
         void create_anim_dll(service::ipc_context &ctx, ws_cmd &cmd);
         void create_click_dll(service::ipc_context &ctx, ws_cmd &cmd);
         void create_sprite(service::ipc_context &ctx, ws_cmd &cmd);
+        void create_pointer_cursor(service::ipc_context &ctx, ws_cmd &cmd);
         void create_wsbmp(service::ipc_context &ctx, ws_cmd &cmd);
         void create_graphic(service::ipc_context &ctx, ws_cmd &cmd);
         void get_window_group_list(service::ipc_context &ctx, ws_cmd &cmd);
@@ -222,6 +223,7 @@ namespace eka2l1::epoc {
         void get_focus_screen(service::ipc_context &ctx, ws_cmd &cmd);
         void event_ready_cancel(service::ipc_context &ctx, ws_cmd &cmd);
         void redraw_ready_cancel(service::ipc_context &ctx, ws_cmd &cmd);
+        void get_double_click_settings(service::ipc_context &ctx, ws_cmd &cmd);
 
     public:
         ~window_server_client();
@@ -378,6 +380,8 @@ namespace eka2l1 {
         std::uint64_t next_repeat_delay_; ///< Time that the next repeat event after the previous being generated.
 
         int repeatable_event_;
+        int deliver_report_visibility_evt_;
+
         std::set<std::uint64_t> cancel_repeatable_list;
 
         enum {
@@ -515,6 +519,10 @@ namespace eka2l1 {
 
         const bool no_redraw_storing_enabled() const {
             return config_flags & CONFIG_FLAG_NO_REDRAW_STORING;
+        }
+
+        int get_deliver_delay_report_visiblity_event() const {
+            return deliver_report_visibility_evt_;
         }
     };
 }

@@ -89,6 +89,7 @@ set(PROJECT_SOURCES
         src/btnet_dialog.cpp
         src/btnet_dialog.ui
         src/cmdhandler.cpp
+        src/common_library_plugin.cpp
         src/device_install_dialog.cpp
         src/device_install_dialog.ui
         src/displaywidget.cpp
@@ -238,7 +239,7 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/upscale/" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/upscale/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/defaultbank.hsb" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/emu/drivers/resources/defaultbank.sf2" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/config/compat/" "$<TARGET_FILE_DIR:eka2l1_qt>/compat/"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/miscs/compat/" "$<TARGET_FILE_DIR:eka2l1_qt>/compat/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/src/external/SDL_GameControllerDB/gamecontrollerdb.txt" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/src/emu/qt/resources/" "$<TARGET_FILE_DIR:eka2l1_qt>/resources/"
         )

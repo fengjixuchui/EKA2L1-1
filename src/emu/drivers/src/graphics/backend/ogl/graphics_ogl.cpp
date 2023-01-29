@@ -154,6 +154,10 @@ namespace eka2l1::drivers {
                 anisotrophy_max_ = 1.0f;
                 glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotrophy_max_);
             }
+
+            if (strcmp(reinterpret_cast<const char*>(next_extension), "GL_ARB_ES3_1_compatibility") == 0) {
+                feature_flags_ |= OGL_FEATURE_COMPABILITY_ES31;
+            }
         }
 
         std::string feature = "";
@@ -168,6 +172,10 @@ namespace eka2l1::drivers {
 
         if (feature_flags_ & OGL_FEATURE_SUPPORT_ANISOTROPHY) {
             feature += "AnisotrophyFiltering;";
+        }
+
+        if (feature_flags_ & OGL_FEATURE_COMPABILITY_ES31) {
+            feature += "ES3.1_Compability;";
         }
 
         if (!feature.empty()) {
@@ -198,6 +206,10 @@ namespace eka2l1::drivers {
     bool ogl_graphics_driver::support_extension(const graphics_driver_extension ext) {
         if (ext == graphics_driver_extension_anisotrophy_filtering) {
             return (feature_flags_ & OGL_FEATURE_SUPPORT_ANISOTROPHY);
+        }
+
+        if (ext == graphics_driver_extension_float_precision_qualifier) {
+            return is_gles || (feature_flags_ & OGL_FEATURE_COMPABILITY_ES31);
         }
 
         return false;
@@ -318,16 +330,16 @@ namespace eka2l1::drivers {
         color_loc = sprite_program->get_uniform_location("u_color").value_or(-1);
         proj_loc = sprite_program->get_uniform_location("u_proj").value_or(-1);
         model_loc = sprite_program->get_uniform_location("u_model").value_or(-1);
-        in_position_loc = sprite_program->get_attrib_location("in_position").value_or(-1);
-        in_texcoord_loc = sprite_program->get_attrib_location("in_texcoord").value_or(-1);
+        in_position_loc = is_stricted() ? 0 : sprite_program->get_attrib_location("in_position").value_or(-1);
+        in_texcoord_loc = is_stricted() ? 1 : sprite_program->get_attrib_location("in_texcoord").value_or(-1);
 
         color_upscaled_loc = upscale_program->get_uniform_location("u_color").value_or(-1);
         proj_upscaled_loc = upscale_program->get_uniform_location("u_proj").value_or(-1);
         model_upscaled_loc = upscale_program->get_uniform_location("u_model").value_or(-1);
         texel_delta_upscaled_loc_ = upscale_program->get_uniform_location("u_texelDelta").value_or(-1);
         pixel_delta_upscaled_loc_ = upscale_program->get_uniform_location("u_pixelDelta").value_or(-1);
-        in_position_loc_upscale = upscale_program->get_attrib_location("in_position").value_or(-1);
-        in_texcoord_loc_upscale = upscale_program->get_attrib_location("in_texcoord").value_or(-1);
+        in_position_loc_upscale = is_stricted() ? 0 : upscale_program->get_attrib_location("in_position").value_or(-1);
+        in_texcoord_loc_upscale = is_stricted() ? 1 : upscale_program->get_attrib_location("in_texcoord").value_or(-1);
 
         color_loc_brush = brush_program->get_uniform_location("u_color").value_or(-1);
         proj_loc_brush = brush_program->get_uniform_location("u_proj").value_or(-1);
@@ -340,8 +352,8 @@ namespace eka2l1::drivers {
         source_loc_mask = mask_program->get_uniform_location("u_tex").value_or(-1);
         mask_loc_mask = mask_program->get_uniform_location("u_mask").value_or(-1);
         flat_blend_loc_mask = mask_program->get_uniform_location("u_flat").value_or(-1);
-        in_position_loc_mask = mask_program->get_attrib_location("in_position").value_or(-1);
-        in_texcoord_loc_mask = mask_program->get_attrib_location("in_texcoord").value_or(-1);
+        in_position_loc_mask = is_stricted() ? 0 : mask_program->get_attrib_location("in_position").value_or(-1);
+        in_texcoord_loc_mask = is_stricted() ? 1 : mask_program->get_attrib_location("in_texcoord").value_or(-1);
         
         color_loc_pen = pen_program->get_uniform_location("u_color").value_or(-1);
         proj_loc_pen = pen_program->get_uniform_location("u_proj").value_or(-1);
@@ -620,21 +632,27 @@ namespace eka2l1::drivers {
         glBufferData(GL_ARRAY_BUFFER, sizeof(verts), nullptr, GL_STATIC_DRAW);
         glBufferData(GL_ARRAY_BUFFER, sizeof(verts), vert_pointer, GL_STATIC_DRAW);
 
+        int position_loc = -1;
+
         if (flags & bitmap_draw_flag_use_upscale_shader) {
-            glEnableVertexAttribArray(in_position_loc_upscale);
+            position_loc = in_position_loc_upscale;
         } else {
-            glEnableVertexAttribArray(mask_draw_texture ? in_position_loc_mask : in_position_loc);
+            position_loc = mask_draw_texture ? in_position_loc_mask : in_position_loc;
         }
 
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (GLvoid *)0);
+        glEnableVertexAttribArray(position_loc);
+        glVertexAttribPointer(position_loc, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (GLvoid *)0);
         
+        int texcoord_loc = -1;
+
         if (flags & bitmap_draw_flag_use_upscale_shader) {
-            glEnableVertexAttribArray(in_position_loc_upscale);
+            texcoord_loc = in_texcoord_loc_upscale;
         } else {
-            glEnableVertexAttribArray(mask_draw_texture ? in_texcoord_loc_mask : in_texcoord_loc);
+            texcoord_loc = mask_draw_texture ? in_texcoord_loc_mask : in_texcoord_loc;
         }
 
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (GLvoid *)(2 * sizeof(GLfloat)));
+        glEnableVertexAttribArray(texcoord_loc);
+        glVertexAttribPointer(texcoord_loc, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (GLvoid *)(2 * sizeof(GLfloat)));
 
         if (mask_draw_texture) {
             glUniform1i(source_loc_mask, 0);

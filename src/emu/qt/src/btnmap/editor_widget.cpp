@@ -34,7 +34,7 @@ editor_widget::editor_widget(QWidget *parent, eka2l1::qt::btnmap::executor *exec
     : QDockWidget(parent)
     , ui_(new Ui::editor_widget)
     , map_editor_hidden_(false)
-    , last_scale_factor_(1.0)
+    , last_scale_factor_({ 1.0f, 1.0f })
     , system_(nullptr)
     , map_exec_(exec)
     , previous_profile_combo_index_(-1){
@@ -78,7 +78,7 @@ void editor_widget::hear_active_app(eka2l1::system *sys) {
     }
 }
 
-static const char *BINDING_TOUCH_FOLDER_FORMAT = "bindings\\touch\\%1";
+static const char *BINDING_TOUCH_FOLDER_FORMAT = "bindings/touch/%1";
 
 void editor_widget::on_potential_current_app_changed() {
     std::optional<eka2l1::akn_running_app_info> current_app_info = ::get_active_app_info(system_);
@@ -116,7 +116,7 @@ void editor_widget::on_potential_current_app_changed() {
             ui_->profile_combo_box->addItem("default");
         }
 
-        profile_use_config_file_ = profile_folder_path_ + "\\Game name - " + QString::fromStdString(current_app_name_);
+        profile_use_config_file_ = profile_folder_path_ + "/Game name - " + QString::fromStdString(current_app_name_);
 
         std::uint32_t current_index = 0;
 
@@ -154,7 +154,7 @@ void editor_widget::on_profile_add_btn_clicked() {
         return;
     }
 
-    QString profile_path_name = (profile_folder_path_ + "\\" + result + ".yml");
+    QString profile_path_name = (profile_folder_path_ + "/" + result + ".yml");
     if (!QDir().exists(profile_folder_path_)) {
         QDir().mkpath(profile_folder_path_);
     }
@@ -171,7 +171,7 @@ void editor_widget::on_profile_add_btn_clicked() {
 }
 
 void editor_widget::on_profile_delete_btn_clicked() {
-    QString profile_path_name = (profile_folder_path_ + "\\" + ui_->profile_combo_box->currentText() + ".yml");
+    QString profile_path_name = (profile_folder_path_ + "/" + ui_->profile_combo_box->currentText() + ".yml");
     QDir dir;
 
     if (previous_profile_combo_index_ == ui_->profile_combo_box->currentIndex()) {
@@ -195,7 +195,7 @@ void editor_widget::on_delete_btn_clicked(bool checked) {
 }
 
 void editor_widget::draw(eka2l1::drivers::graphics_driver *driver, eka2l1::drivers::graphics_command_builder &builder,
-    const float scale_factor) {
+    const eka2l1::vec2f &scale_factor) {
     last_scale_factor_ = scale_factor;
 
     if (!map_editor_hidden_) {
@@ -273,7 +273,7 @@ void editor_widget::on_save_toggle_profile_btn_clicked() {
 
         ui_->save_toggle_profile_btn->setText(tr("Save and hide editor"));
     } else {
-        QString previous_profile_path_name = (profile_folder_path_ + "\\" + ui_->profile_combo_box->currentText() + ".yml");
+        QString previous_profile_path_name = (profile_folder_path_ + "/" + ui_->profile_combo_box->currentText() + ".yml");
         map_editor_.export_to(map_exec_);
         map_exec_->serialize(previous_profile_path_name.toStdString());
 
@@ -292,12 +292,12 @@ void editor_widget::on_save_toggle_profile_btn_clicked() {
 
 void editor_widget::on_profile_combo_box_activated(int index) {
     if (previous_profile_combo_index_ >= 0) {
-        QString previous_profile_path_name = (profile_folder_path_ + "\\" + ui_->profile_combo_box->itemText(previous_profile_combo_index_) + ".yml");
+        QString previous_profile_path_name = (profile_folder_path_ + "/" + ui_->profile_combo_box->itemText(previous_profile_combo_index_) + ".yml");
         map_editor_.export_to(map_exec_);
         map_exec_->serialize(previous_profile_path_name.toStdString());
     }
 
-    QString profile_path_name = (profile_folder_path_ + "\\" + ui_->profile_combo_box->itemText(index) + ".yml");
+    QString profile_path_name = (profile_folder_path_ + "/" + ui_->profile_combo_box->itemText(index) + ".yml");
     map_exec_->deserialize(profile_path_name.toStdString());
     map_editor_.import_from(map_exec_);
 

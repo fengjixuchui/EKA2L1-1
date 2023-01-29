@@ -60,10 +60,6 @@ namespace eka2l1::epoc {
         return (ordinal_pos << (max_pri_level * bits_per_ordpos));
     }
 
-    eka2l1::vec2 top_canvas::get_origin() {
-        return { 0, 0 };
-    }
-
     eka2l1::vec2 top_canvas::absolute_position() const {
         return { 0, 0 };
     }
@@ -82,7 +78,8 @@ namespace eka2l1::epoc {
         , max_pointer_buffer_(0)
         , last_draw_(0)
         , last_fps_sync_(0)
-        , fps_count_(0) {
+        , fps_count_(0)
+        , in_visibility_delay_report_(false) {
         set_initial_state();
 
         abs_rect.top = reinterpret_cast<canvas_interface *>(parent)->absolute_position();
@@ -113,6 +110,12 @@ namespace eka2l1::epoc {
     }
 
     canvas_base::~canvas_base() {
+        if (in_visibility_delay_report_) {
+            ntimer *timer = client->get_ws().get_ntimer();
+            timer->unschedule_event(client->get_ws().get_deliver_delay_report_visiblity_event(),
+                reinterpret_cast<std::uint64_t>(this));
+        }
+
         set_visible(false);
 
         remove_from_sibling_list();
@@ -211,10 +214,6 @@ namespace eka2l1::epoc {
         return ((flags & flags_active) && (flags & flags_visible));
     }
 
-    eka2l1::vec2 canvas_base::get_origin() {
-        return pos;
-    }
-
     eka2l1::rect canvas_base::bounding_rect() const {
         eka2l1::rect bound;
         bound.top = { 0, 0 };
@@ -240,7 +239,15 @@ namespace eka2l1::epoc {
         return abs_rect.size;
     }
 
-    void canvas_base::report_visiblity_change() {
+    void canvas_base::report_visiblity_change(const bool forced) {
+        if (!forced && in_visibility_delay_report_) {
+            return;
+        }
+
+        if (forced) {
+            in_visibility_delay_report_ = false;
+        }
+
         if ((flags & flag_visiblity_event_report) == 0) {
             return;
         }
@@ -626,11 +633,52 @@ namespace eka2l1::epoc {
     void canvas_base::enable_visiblity_change_events(service::ipc_context &ctx, eka2l1::ws_cmd &cmd) {
         flags |= flag_visiblity_event_report;
 
-        scr->recalculate_visible_regions();
-        report_visiblity_change();
+        // Delay the report a bit... With IPC + system expected delay
+        // Games needed: Digitial Chocolate N-Gage 2.0 games, display ready is called when display object instance is not yet created
+        if (!in_visibility_delay_report_) {
+            in_visibility_delay_report_ = true;
+
+            window_server &ws = client->get_ws();
+            ntimer *timer = ws.get_ntimer();
+
+            timer->schedule_event(epoc::WS_DELIVER_REPORT_VISIBILITY_INIT_DELAY, ws.get_deliver_delay_report_visiblity_event(),
+                reinterpret_cast<std::uint64_t>(this));
+        } else {
+            if (scr->need_update_visible_regions()) {
+                scr->recalculate_visible_regions();
+            }
+        }
         
         ctx.complete(epoc::error_none);
     }
+    
+    void canvas_base::inquire_offset(service::ipc_context &ctx, ws_cmd &cmd) {
+        // The data given is a 32 bit handle.
+        // We are suppose to write back the offset distance between the given window and this.
+        const std::uint32_t handle = *reinterpret_cast<std::uint32_t *>(cmd.data_ptr);
+        canvas_base *win = reinterpret_cast<canvas_base *>(client->get_object(handle));
+
+        if (!win) {
+            ctx.complete(epoc::error_not_found);
+            return;
+        }
+
+        if (win->type == epoc::window_kind::group) {
+            win = reinterpret_cast<canvas_base*>(win->child);
+            
+            if (win->type != epoc::window_kind::top_client) {
+                LOG_ERROR(SERVICE_WINDOW, "Inquire offset with a corrupted window group!");
+                ctx.complete(epoc::error_general);
+
+                return;
+            }
+        }
+
+        eka2l1::vec2 offset_dist = absolute_position() - win->absolute_position();
+        ctx.write_data_to_descriptor_argument(reply_slot, offset_dist);
+        ctx.complete(epoc::error_none);
+    }
+
 
     bool canvas_base::execute_command(service::ipc_context &ctx, ws_cmd &cmd) {
         bool useless = false;
@@ -770,6 +818,12 @@ namespace eka2l1::epoc {
             break;
         }
 
+        case EWsWinOpSetPointerCapture: {
+            // TODO: !
+            ctx.complete(epoc::error_none);
+            break;
+        }
+
         case EWsWinOpActivate:
             activate(ctx, cmd);
             break;
@@ -850,6 +904,10 @@ namespace eka2l1::epoc {
         case EWsWinOpSendEffectCommand:
             ctx.complete(epoc::error_none);
             break;
+            
+        case EWsWinOpInquireOffset:
+            inquire_offset(ctx, cmd);
+            break;
 
         default: {
             did_it = false;
@@ -867,7 +925,7 @@ namespace eka2l1::epoc {
     }
         
     bool blank_canvas::draw(drivers::graphics_command_builder &builder) {
-        if (!clear_color_enable || !can_be_physically_seen() || scr->scr_config.blt_offscreen) {
+        if (!clear_color_enable || !can_be_physically_seen() || (!scr->is_screenplay_architecture() && scr->scr_config.blt_offscreen)) {
             return false;
         }
 
@@ -908,7 +966,7 @@ namespace eka2l1::epoc {
             // explicitly invalidated by the window server. This one is, but the one submitted by
             // invalidate alone can't be considered
             if ((new_size.x > abs_rect.size.x) || (new_size.y > abs_rect.size.y)) {
-                if (!scr->scr_config.blt_offscreen && !scr->scr_config.flicker_free) {
+                if (scr->is_screenplay_architecture() || (!scr->scr_config.blt_offscreen && !scr->scr_config.flicker_free)) {
                     common::region newly_expanded;
                     newly_expanded.add_rect(new_bounding_rect);
                     newly_expanded.eliminate(eka2l1::rect(eka2l1::vec2{ 0, 0 }, abs_rect.size));
@@ -924,7 +982,7 @@ namespace eka2l1::epoc {
                 redraw_region.clip(new_bounding_rect);
             }
 
-            if (!scr->scr_config.blt_offscreen && scr->scr_config.flicker_free) {
+            if (scr->is_screenplay_architecture() || (!scr->scr_config.blt_offscreen && scr->scr_config.flicker_free)) {
                 // Clear the whole background
                 background_region.make_empty();
                 background_region.add_rect(eka2l1::rect(eka2l1::vec2{ 0, 0 }, new_size));
@@ -1112,7 +1170,7 @@ namespace eka2l1::epoc {
         // If it does not have content drawn to it, it makes no sense to draw the background
         // Else, there's a flag in window server that enables clear on any siutation
         auto draw_background_color = [&]() {
-            if (!scr->scr_config.blt_offscreen && clear_color_enable && !background_region.empty()) {        
+            if ((scr->is_screenplay_architecture() || !scr->scr_config.blt_offscreen) && clear_color_enable && !background_region.empty()) {        
                 background_region.advance(abs_rect.top);
                 background_region = background_region.intersect(visible_region);
 
@@ -1143,7 +1201,12 @@ namespace eka2l1::epoc {
             auto &segments = redraw_segments_.get_segments();
 
             if (!segments.empty()) {
-                draw_background_color();
+                for (std::size_t i = 0; i < segments.size(); i++) {
+                    if (segments[i]->type_ != gdi_store_command_segment_pending_redraw) {
+                        draw_background_color();
+                        break;
+                    }
+                }
 
                 builder.clip_bitmap_region(visible_region, scr->display_scale_factor);
 
@@ -1161,10 +1224,6 @@ namespace eka2l1::epoc {
 
         if (scr->flags_ & screen::FLAG_CLIENT_REDRAW_PENDING) {
             drivers::command_list cmd_list = driver_builder_.retrieve_command_list();
-            if (pending_segment_ || !cmd_list.empty()) {
-                draw_background_color();
-            }
-
             if (pending_segment_) {
                 builder.clip_bitmap_region(visible_region, scr->display_scale_factor);
 
@@ -1178,6 +1237,7 @@ namespace eka2l1::epoc {
 
             if (!cmd_list.empty()) {
                 builder.clip_bitmap_region(visible_region, scr->display_scale_factor);
+                builder.draw_rectangle(abs_rect);
 
                 if (!builder.merge(cmd_list)) {
                     // Full, need to flush the old one maybe
@@ -1527,7 +1587,7 @@ namespace eka2l1::epoc {
         eka2l1::rect draw_dest_rect = abs_rect;
         scale_rectangle(draw_dest_rect, scr->display_scale_factor);
 
-        if (!scr->scr_config.blt_offscreen && clear_color_enable) {
+        if ((scr->is_screenplay_architecture() || !scr->scr_config.blt_offscreen) && clear_color_enable) {
             auto color_extracted = common::rgba_to_vec(clear_color);
 
             if (display_mode() <= epoc::display_mode::color16mu) {

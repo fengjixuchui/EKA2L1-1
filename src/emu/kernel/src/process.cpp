@@ -110,25 +110,6 @@ namespace eka2l1::kernel {
 
         exe_path = codeseg->get_full_path();
 
-        // EKA2 supports shortening executable path. If it's in /sys/bin/ then we can just shorten
-        // to drive and filename. Gameloft games relies on this (they use DriveAndPath to get the drive of the EXE, lol)
-        if (kern->get_epoc_version() >= epocver::eka2) {
-            const std::u16string rel_path = eka2l1::relative_path(exe_path, true);
-            
-            static const char16_t *PATH_SYS_BIN =  u"sys\\bin\\";
-            static const char16_t *PATH_SYSTEM_LIBS =  u"system\\libs\\";
-            static const char16_t *PATH_SYSTEM_PROGRAMS =  u"system\\programs\\";
-            static const std::size_t PATH_SYS_BIN_LEN = 8;
-            static const std::size_t PATH_SYSTEM_LIBS_LEN = 12;
-            static const std::size_t PATH_SYSTEM_PROGRAMS_LEN = 16;
-
-            if ((common::compare_ignore_case(rel_path.substr(0, PATH_SYS_BIN_LEN), PATH_SYS_BIN) == 0) ||
-                (common::compare_ignore_case(rel_path.substr(0, PATH_SYSTEM_LIBS_LEN), PATH_SYSTEM_LIBS) == 0) ||
-                (common::compare_ignore_case(rel_path.substr(0, PATH_SYSTEM_PROGRAMS_LEN), PATH_SYSTEM_PROGRAMS) == 0)) {
-                exe_path = eka2l1::root_name(exe_path, true) + u'\\' + eka2l1::filename(exe_path, true);
-            }
-        }
-
         // Base on: sprocess.cpp#L245 in kernelhwsrv package
         create_prim_thread(codeseg->get_code_run_addr(this), codeseg->get_entry_point(this), stack_size, heap_min, heap_max,
             kernel::thread_priority::priority_normal);
@@ -210,7 +191,7 @@ namespace eka2l1::kernel {
     }
 
     process::process(kernel_system *kern, memory_system *mem, const std::string &process_name, const std::u16string &exe_path,
-        const std::u16string &cmd_args)
+        const std::u16string &cmd_args, bool use_memory)
         : kernel_obj(kern, process_name, nullptr, access_type::local_access)
         , mm_impl_(nullptr)
         , dll_static_chunk(nullptr)
@@ -239,7 +220,10 @@ namespace eka2l1::kernel {
         }
 
         // Create mem model implementation
-        mm_impl_ = mem::make_new_mem_model_process(mem->get_control(), mem->get_model_type());
+        if (use_memory) {
+            mm_impl_ = mem::make_new_mem_model_process(mem->get_control(), mem->get_model_type());
+        }
+
         generation_ = refresh_generation();
     }
 
@@ -478,13 +462,18 @@ namespace eka2l1::kernel {
 
             return;
         }
+        epoc::notify_info info(logon_request, kern->crr_thread());
 
         if (rendezvous) {
-            rendezvous_requests.emplace_back(logon_request, kern->crr_thread());
+            if (handle_rendezvous_request(info)) {
+                return;
+            }
+
+            rendezvous_requests.push_back(info);
             return;
         }
 
-        logon_requests.emplace_back(logon_request, kern->crr_thread());
+        logon_requests.push_back(info);
     }
 
     bool process::logon_cancel(eka2l1::ptr<epoc::request_status> logon_request, bool rendezvous) {

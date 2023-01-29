@@ -125,9 +125,7 @@ namespace eka2l1::config {
         std::string rtos_level;
 
         bool ui_new_style{ true };
-        bool cenrep_reset{ false };
-        bool mtm_reset{ false };
-        bool mtm_reset_2{ false };
+        bool svg_icon_cache_reset{ false };
         bool report_mmfdev_underflow{ false };
         bool disable_display_content_scale { false };
         bool enable_hw_gles1 { true };
@@ -156,6 +154,7 @@ namespace eka2l1::config {
         bool enable_upnp{ true };
 		std::string btnet_password;
 		std::uint32_t btnet_discovery_mode{ 0 };
+        bool extensive_logging{ false };
 
         void serialize(const bool with_bindings = true);
         void deserialize(const bool with_bindings = true);

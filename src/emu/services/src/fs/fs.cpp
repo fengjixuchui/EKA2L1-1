@@ -125,17 +125,20 @@ namespace eka2l1 {
             return session_path;
         }
 
+        // For some reasons some apps throw path with ton of spaces at the end
+        // Windows is fine with it (probably through tons of fixes they have to do to ensure compatibilities!),
+        // but not the case for other OSes
         if (is_separator(target_path[0])) {
             // Only append the root directory to the beginning
-            return eka2l1::add_path(eka2l1::root_name(session_path, true), target_path, true);
+            return common::trim_spaces(eka2l1::add_path(eka2l1::root_name(session_path, true), target_path, true));
         }
 
         // Check if the path has a root directory
         if (!eka2l1::has_root_name(target_path)) {
-            return eka2l1::add_path(session_path, target_path, true);
+            return common::trim_spaces(eka2l1::add_path(session_path, target_path, true));
         }
 
-        return target_path;
+        return common::trim_spaces(target_path);
     }
 
     size_t fs_path_case_insensitive_hasher::operator()(const utf16_str &key) const {
@@ -269,6 +272,8 @@ namespace eka2l1 {
             HANDLE_CLIENT_IPC(file_set_att, epoc::fs_msg_file_set_att, "Fs::FileSetAtt");
             HANDLE_CLIENT_IPC(file_modified, epoc::fs_msg_file_modified, "Fs::FileModified");
             HANDLE_CLIENT_IPC(file_set_modified, epoc::fs_msg_file_set_modified, "Fs::FileSetModified");
+            HANDLE_CLIENT_IPC(file_lock, epoc::fs_msg_file_lock, "Fs::FileLock");
+            HANDLE_CLIENT_IPC(file_unlock, epoc::fs_msg_file_unlock, "Fs::FileUnlock");
             HANDLE_CLIENT_IPC(is_file_in_rom, epoc::fs_msg_is_file_in_rom, "Fs::IsFileInRom");
             HANDLE_CLIENT_IPC(is_valid_name, epoc::fs_msg_is_valid_name, "Fs::IsValidName");
             HANDLE_CLIENT_IPC(open_dir, epoc::fs_msg_dir_open, "Fs::OpenDir");
@@ -308,6 +313,16 @@ namespace eka2l1 {
                 generic_close(ctx);
             }
 
+            break;
+
+        // Legacy opcode from S60v3 fp1? Probably debug track, I'm unsure!
+        case epoc::fs_msg_notification_open:
+        case epoc::fs_msg_notification_buffer:
+        case epoc::fs_msg_notification_remove:
+        case epoc::fs_msg_notification_cancel:
+        case epoc::fs_msg_notification_request:
+        case epoc::fs_msg_notification_subclose:
+            ctx->complete(epoc::error_none);
             break;
 
         default: {
@@ -893,6 +908,16 @@ namespace eka2l1 {
         std::u16string fs_stub_name = (drv == drive_z) ? u"ROFS" : u"FAT";
 
         ctx->write_arg(0, fs_stub_name);
+        ctx->complete(epoc::error_none);
+    }
+
+    void fs_server_client::file_lock(service::ipc_context *ctx) {
+        LOG_TRACE(SERVICE_EFSRV, "Locking file unimplemented!");
+        ctx->complete(epoc::error_none);
+    }
+
+    void fs_server_client::file_unlock(service::ipc_context *ctx) {
+        LOG_TRACE(SERVICE_EFSRV, "Unlocking file unimplemented!");
         ctx->complete(epoc::error_none);
     }
 }

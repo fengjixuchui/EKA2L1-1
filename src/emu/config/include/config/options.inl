@@ -59,9 +59,7 @@ OPTION(cpu-load-save, cpu_load_save, true)
 OPTION(mime-detection, mime_detection, true)
 OPTION(rtos-level, rtos_level, "mid")
 OPTION(ui-new-style, ui_new_style, true)
-OPTION(cenrep-reset, cenrep_reset, false)
-OPTION(mtm-reset, mtm_reset, false)
-OPTION(mtm-reset-2, mtm_reset_2, false)
+OPTION(svg-icon-cache-reset, svg_icon_cache_reset, false)
 OPTION(imei, imei, DEFAULT_IMI)
 OPTION(mmc-id, mmc_id, DEFAULT_MMC_ID)
 OPTION(audio-master-volume, audio_master_volume, 100)
@@ -81,6 +79,7 @@ OPTION(btnet-port-offset, btnet_port_offset, 15000)
 OPTION(btnet-password, btnet_password, "")
 OPTION(btnet-discovery-mode, btnet_discovery_mode, 0)
 OPTION(enable-upnp, enable_upnp, true)
+OPTION(extensive-logging, extensive_logging, false)
 
 #ifdef OPTION
 #undef OPTION

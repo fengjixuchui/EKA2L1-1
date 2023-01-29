@@ -41,6 +41,7 @@
 
 #include <kernel/kernel.h>
 #include <kernel/libmanager.h>
+#include <kernel/guomen_process.h>
 #include <kernel/scheduler.h>
 #include <kernel/thread.h>
 #include <loader/romimage.h>
@@ -663,6 +664,10 @@ namespace eka2l1 {
     std::size_t kernel_system::register_uid_process_change_callback(uid_of_process_change_callback callback) {
         return uid_of_process_callback_funcs_.add(callback);
     }
+    
+    std::size_t kernel_system::register_guomen_process_run_callback(guomen_process_run_callback callback) {
+        return guomen_process_run_callback_funcs_.add(callback);
+    }
 
     bool kernel_system::unregister_ipc_send_callback(const std::size_t handle) {
         return ipc_send_callbacks_.remove(handle);
@@ -698,6 +703,10 @@ namespace eka2l1 {
 
     bool kernel_system::unregister_uid_of_process_change_callback(const std::size_t handle) {
         return uid_of_process_callback_funcs_.remove(handle);
+    }
+    
+    bool kernel_system::unregister_guomen_process_run_callback(const std::size_t handle) {
+        return guomen_process_run_callback_funcs_.remove(handle);
     }
 
     ldd::factory_instantiate_func kernel_system::suitable_ldd_instantiate_func(const char *name) {
@@ -787,8 +796,25 @@ namespace eka2l1 {
     // We can support also ELF!
     process_ptr kernel_system::spawn_new_process(const std::u16string &path, const std::u16string &cmd_arg, const kernel::uid promised_uid3,
         const std::uint32_t stack_size) {
+        if (path == kernel::BRIDAGED_EXECUTABLE_NAME) {
+            // Spawn a fake process that's linked to a real process
+            return create<kernel::guomen_process>(mem_, cmd_arg);
+        }
+
+        // NOTE: Workaround for launching game on S^3 or more with keeping the path same for both applist and system calls
+        // For ID3works games
+        std::u16string corrected_path = path;
+
+        if (get_epoc_version() >= epocver::epoc95) {
+            auto root_path = eka2l1::root_path(corrected_path, true);
+            auto rel_path = eka2l1::file_directory(corrected_path, true);
+            if (!root_path.empty() && (root_path == rel_path)) {
+                corrected_path.erase(corrected_path.begin() + 2);
+            }
+        }
+
         std::u16string full_path;
-        auto imgs = lib_mngr_->try_search_and_parse(path, &full_path);
+        auto imgs = lib_mngr_->try_search_and_parse(corrected_path, &full_path);
 
         if (!imgs.first && !imgs.second) {
             return nullptr;
@@ -860,6 +886,11 @@ namespace eka2l1 {
         }
 
         LOG_TRACE(KERNEL, "Spawned process: {}, entry point = 0x{:X}", process_name, cs->get_code_run_addr(&(*pr)));
+        
+        if (eka2l1::has_root_name(path, true)) {
+            cs->set_full_path(path);
+        }
+
         pr->construct_with_codeseg(cs, new_stack_size, heap_min, heap_max, pri);
 
         return pr;
@@ -1314,6 +1345,16 @@ namespace eka2l1 {
 
         dll_global_data_last_offset_ += size;
         return true;
+    }
+
+    bool kernel_system::handle_guomen_process_run(kernel::process *guomen_process) {
+        for (auto func: guomen_process_run_callback_funcs_) {
+            if (func(guomen_process)) {
+                return true;
+            }
+        }
+
+        return false;
     }
     
     bool kernel_system::should_panic_be_blocked(kernel::thread *thr, const std::string &category, const std::int32_t code) {
